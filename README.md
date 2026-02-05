@@ -16,7 +16,7 @@ This project demonstrates how to unify a data lake and a data warehouse by combi
 
 ## Architecture
 
-![Architecture](docs/architecture/architecture_lakehouse.drawio)
+![Architecture](docs/architecture/architecture_lakehouse.png)
 
 **High-level flow**
 
