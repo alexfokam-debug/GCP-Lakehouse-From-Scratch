@@ -1,26 +1,57 @@
-"""
-Génère un petit dataset de démo et l'exporte en Parquet.
-Objectif : avoir un fichier réel à déposer dans le bucket RAW.
-"""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
-# Données d'exemple (typées et réalistes)
-df = pd.DataFrame(
-    [
-        {"order_id": 1, "customer_id": 101, "amount": 49.90, "order_date": "2026-02-01"},
-        {"order_id": 2, "customer_id": 102, "amount": 15.00, "order_date": "2026-02-02"},
-        {"order_id": 3, "customer_id": 101, "amount": 120.00, "order_date": "2026-02-03"},
-    ]
-)
 
-# Convertir la date en type date (mieux pour BigQuery)
-df["order_date"] = pd.to_datetime(df["order_date"]).dt.date
+def build_sample_df() -> pd.DataFrame:
+    # Dataset de démo (tu peux adapter ensuite à ton vrai schéma)
+    now = datetime.now(timezone.utc)
+    return pd.DataFrame(
+        [
+            {"id": 1, "name": "alex", "amount": 10.5, "event_ts": now},
+            {"id": 2, "name": "lakehouse", "amount": 20.0, "event_ts": now},
+        ]
+    )
 
-# Export Parquet
-output_path = "/tmp/orders.parquet"
-df.to_parquet(output_path, index=False)
 
-print(f"✅ Parquet généré : {output_path}")
-print(df.dtypes)
-print(df)
+def write_parquet(df: pd.DataFrame, out_path: Path) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    table = pa.Table.from_pandas(df, preserve_index=False)
+    pq.write_table(table, out_path)
+
+    print("✅ Parquet generated")
+    print(f"   path: {out_path.resolve()}")
+    print(f"   size: {out_path.stat().st_size} bytes")
+    print(f"   rows: {len(df)}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--out",
+        default="data/sample.parquet",
+        help="Output parquet path (relative to repo root if not absolute)",
+    )
+    args = parser.parse_args()
+
+    # IMPORTANT: on écrit TOUJOURS depuis la racine repo,
+    # donc on résout le chemin par rapport au CWD actuel.
+    out_path = Path(args.out)
+
+    print("ℹ️ Running make_parquet.py")
+    print(f"   cwd: {Path.cwd().resolve()}")
+    print(f"   out: {out_path}")
+
+    df = build_sample_df()
+    write_parquet(df, out_path)
+
+
+if __name__ == "__main__":
+    main()

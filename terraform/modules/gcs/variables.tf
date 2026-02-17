@@ -17,7 +17,8 @@ variable "bucket_name" {
 variable "location" {
   description = "Bucket location (EU, US, etc.)"
   type        = string
-  default     = "EU"
+  default     = "europe-west1"
+
 }
 
 # Environnement (dev, prod, etc.)
@@ -28,9 +29,28 @@ variable "environment" {
 }
 
 # Labels personnalisables
-# → Permet d’ajouter des tags communs (owner, cost_center, etc.)
+# → Permet d’ajouter des tags communs (owner, cost_center, platform, etc.)
 variable "labels" {
-  description = "Common labels for the bucket"
+  description = "Common labels for the bucket (owner, cost_center, platform, etc.)"
   type        = map(string)
   default     = {}
+}
+
+# Couche data (raw / curated / gold...)
+variable "layer" {
+  description = "Data layer for this bucket (raw, curated, etc.)"
+  type        = string
+  default     = "raw"
+}
+
+# Nom logique du domaine data (ex: sales, finance, hr)
+variable "domain" {
+  description = "Business data domain (sales, finance, hr, etc.)"
+  type        = string
+}
+
+# Nom logique du dataset métier
+variable "dataset_name" {
+  description = "Logical dataset name (used for Dataplex asset naming)"
+  type        = string
 }

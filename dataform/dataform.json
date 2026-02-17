@@ -1,0 +1,8 @@
+{
+  "name": "gcp-lakehouse-from-scratch",
+  "projectId": "lakehouse-486419",
+  "defaultSchema": "analytics_dev",
+  "assertionSchema": "dataform_assertions_dev",
+  "warehouse": "bigquery",
+  "defaultDatabase": "lakehouse-486419"
+}

@@ -1,0 +1,6 @@
+defaultProject: lakehouse-486419
+defaultLocation: europe-west1
+
+# Dataform utilise ce fichier pour gérer des paramètres d’exécution.
+# Ton schedule est géré côté Terraform (Workflow Config).
+# Ici on garde un fichier propre et "entreprise".

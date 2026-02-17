@@ -1,0 +1,22 @@
+config {
+  type: "view",
+  tags: ["staging"],
+  schema: constants.analyticsDataset,
+  name: "stg_orders"
+}
+
+/**
+ * STAGING : normalisation des données commandes
+ * - TYPAGE
+ * - renommage cohérent
+ * - suppression des colonnes inutiles
+ */
+
+select
+  cast(order_id as string)         as order_id,
+  cast(customer_id as string)      as customer_id,
+  cast(order_ts as timestamp)      as order_ts,
+  cast(amount as numeric)          as amount,
+  cast(status as string)           as status
+from
+  ${ref("src_raw_orders")};

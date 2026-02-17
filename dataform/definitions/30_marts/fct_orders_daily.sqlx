@@ -1,0 +1,24 @@
+config {
+  type: "table",
+  tags: ["prod"],
+  schema: constants.analyticsDataset,
+  name: "fct_orders_daily",
+
+  bigquery: {
+    partitionBy: "order_date",
+    clusterBy: ["country"]
+  }
+}
+
+/**
+ * FACT : agrégation quotidienne commandes
+ * - Table BigQuery NATIVE partitionnée
+ */
+
+select
+  order_date,
+  country,
+  count(*) as orders_count,
+  sum(amount) as revenue
+from ${ref("int_orders_enriched")}
+group by 1, 2;

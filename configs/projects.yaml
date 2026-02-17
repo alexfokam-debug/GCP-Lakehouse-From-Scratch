@@ -1,0 +1,35 @@
+# =============================================================================
+# projects.yaml — SOURCE OF TRUTH (multi-project bootstrap)
+# =============================================================================
+
+billing_account_id: "012540-89C48D-E8A3CC"
+
+projects:
+  dev:
+    project_id: "lakehouse-dev-486419"
+    environment_label: "dev"
+
+  staging:
+    project_id: "lakehouse-stg-486419"
+    environment_label: "stg"
+
+  prod:
+    project_id: "lakehouse-prd-486419"
+    environment_label: "prd"
+
+# APIs minimales pour ton lakehouse
+apis:
+  - cloudresourcemanager.googleapis.com
+  - iam.googleapis.com
+  - compute.googleapis.com
+  - bigquery.googleapis.com
+  - dataproc.googleapis.com
+  - dataplex.googleapis.com
+  - dataform.googleapis.com
+  - secretmanager.googleapis.com
+
+# Labels "enterprise" (ça remplace les tags org-level quand tu n'as pas les droits)
+labels:
+  owner: "alex"
+  platform: "lakehouse"
+  cost_center: "data"

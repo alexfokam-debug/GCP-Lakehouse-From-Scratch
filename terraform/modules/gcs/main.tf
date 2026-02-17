@@ -19,6 +19,7 @@ resource "google_storage_bucket" "this" {
   #   - rollback
   #   - audit
   #   - protection contre suppressions accidentelles
+  force_destroy = true
   versioning {
     enabled = true
   }
@@ -31,7 +32,10 @@ resource "google_storage_bucket" "this" {
     var.labels,
     {
       environment = var.environment
-      layer       = "raw"
+      layer       = var.layer
     }
   )
+
 }
+
+

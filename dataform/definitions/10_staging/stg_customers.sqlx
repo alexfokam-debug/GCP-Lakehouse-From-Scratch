@@ -1,0 +1,20 @@
+config {
+  type: "view",
+  tags: ["staging"],
+  schema: constants.analyticsDataset,
+  name: "stg_customers"
+}
+
+/**
+ * STAGING : clients (depuis Iceberg)
+ * - Ici on lit curated_ext_<env>.customer (Iceberg externe)
+ */
+
+select
+  cast(customer_id as string)      as customer_id,
+  cast(full_name as string)        as full_name,
+  cast(email as string)            as email,
+  cast(country as string)          as country,
+  cast(created_ts as timestamp)    as created_ts
+from
+  ${ref("src_curated_customers_iceberg")};

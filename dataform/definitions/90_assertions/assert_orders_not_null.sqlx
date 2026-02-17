@@ -1,0 +1,13 @@
+config {
+  type: "assertion",
+  tags: ["prod"]
+}
+
+/**
+ * ASSERTION : order_id ne doit jamais être NULL
+ */
+
+select
+  *
+from ${ref("stg_orders")}
+where order_id is null;

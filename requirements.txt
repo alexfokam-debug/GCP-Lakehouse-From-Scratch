@@ -1,0 +1,17 @@
+# ============================================================
+# Lakehouse repo dependencies (enterprise)
+# ============================================================
+# On met ICI toutes les deps du repo (source-of-truth).
+# Ainsi, CI + onboard + postes dev = même runtime.
+# ============================================================
+
+PyYAML==6.0.3
+
+# ============================================
+# Google Cloud SDK (GCS client)
+# ============================================
+google-cloud-storage>=2.16.0
+google-api-core>=2.17.0
+google-cloud-bigquery>=3.25.0
+google-cloud-dataform >= 0.5.0
+google-auth
