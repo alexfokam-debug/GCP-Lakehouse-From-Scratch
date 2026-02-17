@@ -17,3 +17,12 @@ terraform/.terraform.lock.hcl
 # ---- Local data / temp ----
 data/
 .tmp_sql_rendered/
+# ---- IDE / OS ----
+.idea/
+.DS_Store
+
+# ---- Logs / build ----
+*.log
+dist/
+build/
+*.egg-info/
