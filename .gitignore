@@ -1,0 +1,19 @@
+
+# ---- Terraform (local state / providers) ----
+terraform/.terraform/
+**/.terraform/
+terraform/.terraform.lock.hcl
+**/.terraform.lock.hcl
+
+# tfstate (ne jamais versionner)
+*.tfstate
+*.tfstate.*
+
+# ---- Python / venv ----
+.venv/
+**/__pycache__/
+*.pyc
+
+# ---- Local data / temp ----
+data/
+.tmp_sql_rendered/
