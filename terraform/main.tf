@@ -352,7 +352,7 @@ module "dataform" {
   project_id  = var.project_id
   region      = var.region
   environment = var.environment
-
+  repository_name = var.dataform_repository_name
   # ---------------------------------------------------------------------------
   # Nommage repository Dataform
   # repo_name = ID technique (API)

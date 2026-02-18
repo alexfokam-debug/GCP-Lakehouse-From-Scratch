@@ -26,3 +26,23 @@ data/
 dist/
 build/
 *.egg-info/
+
+# Terraform (global)
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# Python
+.env
+pip-wheel-metadata/

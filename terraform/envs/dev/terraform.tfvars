@@ -96,3 +96,4 @@ enable_samples = true
 project_id_short = "486419"
 
 dataform_sa_email = "sa-dataform-dev@lakehouse-486419.iam.gserviceaccount.com"
+dataform_repository_name = "lakehouse-dev-dataform"

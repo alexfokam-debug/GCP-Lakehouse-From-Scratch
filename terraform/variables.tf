@@ -187,3 +187,7 @@ variable "dataform_sa_email" {
   description = "Email du service account Dataform runtime (ex: sa-dataform-dev@PROJECT.iam.gserviceaccount.com)."
   type        = string
 }
+variable "dataform_repository_name" {
+  type        = string
+  description = "Nom du repository Dataform (ex: lakehouse-dev-dataform)"
+}
