@@ -1,19 +1,35 @@
 /**
- * constants.js
- * Objectif : centraliser les datasets par environnement (dev/prod)
- * La variable `dataform.projectConfig.vars.env` vient de Terraform Release Config:
- *  vars = { env = var.environment }
+ * includes/constants.js
+ * Centralisation des constantes par environnement.
+ * L'environnement est injecté via Terraform ReleaseConfig:
+ * vars = { env = var.environment }
  */
 
-const env = (dataform.projectConfig.vars && dataform.projectConfig.vars.env) || "dev";
+const env =
+  (dataform.projectConfig.vars &&
+    dataform.projectConfig.vars.env) ||
+  "dev";
 
+const PROJECT_ID =
+  dataform.projectConfig.defaultDatabase;
+
+// Export unique et propre
 module.exports = {
-  env,
+  ENV: env,
+  PROJECT_ID,
 
-  // Datasets sources
-  rawDataset: `raw_ext_${env}`,         // ex: raw_ext_dev
-  curatedExtDataset: `curated_ext_${env}`, // ex: curated_ext_dev (tables externes ICEBERG)
+  // =========================
+  // DATASETS SOURCES
+  // =========================
+  RAW_DATASET: `raw_${env}`,
+  RAW_EXT_DATASET: `raw_ext_${env}`,
 
-  // Datasets cibles
-  analyticsDataset: `analytics_${env}`  // ex: analytics_dev (tables BigQuery natives)
+  CURATED_DATASET: `curated_${env}`,
+  CURATED_EXT_DATASET: `curated_ext_${env}`,
+  CURATED_ICEBERG_DATASET: `curated_iceberg_${env}`,
+
+  // =========================
+  // DATASETS ANALYTICS (marts)
+  // =========================
+  ANALYTICS_DATASET: `analytics_${env}`
 };

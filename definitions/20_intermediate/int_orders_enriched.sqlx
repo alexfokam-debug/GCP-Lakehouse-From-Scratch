@@ -3,7 +3,7 @@ config {
   tags: ["prod"],
 
   // "prod" = ce que ton workflow exécute (included_tags = ["prod"])
-  schema: constants.analyticsDataset,
+  schema: constants.ANALYTICS_DATASET,
   name: "int_orders_enriched"
 }
 

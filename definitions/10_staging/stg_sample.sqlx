@@ -1,8 +1,8 @@
 config {
   type: "table",
-  schema: constants.CURATED_DATASET,
+  schema: "analytics_dev",
   name: "stg_sample",
-  tags: ["staging", "curated"]
+  tags: ["prod"]
 }
 
 /*

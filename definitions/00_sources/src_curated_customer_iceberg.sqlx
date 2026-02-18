@@ -1,7 +1,7 @@
 config {
   type: "view",
   tags: ["staging"],
-  schema: constants.analyticsDataset,
+  schema: constants.ANALYTICS_DATASET,
   name: "src_curated_customers_iceberg"
 }
 
@@ -14,4 +14,4 @@ config {
 select
   *
 from
-  `${dataform.projectConfig.defaultDatabase}.${constants.curatedExtDataset}.customer`;
+  `${dataform.projectConfig.defaultDatabase}.${constants.CURATED_EXT_DATASET}.customer`;

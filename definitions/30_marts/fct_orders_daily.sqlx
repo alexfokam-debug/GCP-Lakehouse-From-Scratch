@@ -3,20 +3,16 @@ config {
   schema: "analytics_dev",
   name: "fct_orders_daily",
   tags: ["prod"],
-
-  // Recommandé : si tu as un identifiant unique par ligne (ex: order_id)
-  // Si c'est une table agrégée journalière, mets plutôt uniqueKey sur (order_date, customer_id) ou juste order_date.
   uniqueKey: ["order_date", "customer_id"],
 
   bigquery: {
-    partitionBy: "order_date",
+    partitionBy: "DATE(order_date)",
     requirePartitionFilter: true
   }
 }
 
 with base as (
   select
-    -- ⚠️ IMPORTANT : donne un nom à chaque colonne
     date(order_timestamp) as order_date,
     customer_id,
     order_id,
@@ -39,4 +35,4 @@ daily as (
   group by 1,2
 )
 
-select * from daily;
+select * from daily

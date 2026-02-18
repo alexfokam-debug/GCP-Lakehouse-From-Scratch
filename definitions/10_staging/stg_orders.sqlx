@@ -1,9 +1,14 @@
-config {
-  type: "view",
-  tags: ["staging"],
-  schema: constants.analyticsDataset,
-  name: "stg_orders"
+js {
+  const constants = require("constants");
 }
+
+config {
+  schema: constants.ANALYTICS_DATASET,
+  name: "stg_orders",
+  type: "table",
+  tags: ["prod"]
+}
+
 
 /**
  * STAGING : normalisation des données commandes

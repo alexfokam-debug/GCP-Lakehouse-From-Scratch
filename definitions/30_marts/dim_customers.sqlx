@@ -1,7 +1,7 @@
 config {
   type: "table",
   tags: ["prod"],
-  schema: constants.analyticsDataset,
+  schema: constants.ANALYTICS_DATASET,
   name: "dim_customers",
 
   // Option entreprise : partition / clustering quand utile
