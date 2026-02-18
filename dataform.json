@@ -1,5 +1,0 @@
-{
-  "warehouse": "bigquery",
-  "defaultSchema": "analytics_dev",
-  "defaultDatabase": "lakehouse-486419"
-}
