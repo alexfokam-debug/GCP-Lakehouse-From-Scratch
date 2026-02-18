@@ -53,3 +53,5 @@ variable "enable_tmp_dataset" {
   default     = true
 }
 
+variable "project_number"   { type = string }
+variable "dataform_sa_email"{ type = string }

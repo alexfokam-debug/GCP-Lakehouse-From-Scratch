@@ -111,6 +111,7 @@ resource "google_dataform_repository_workflow_config" "prod_weekdays" {
   # Exécuter uniquement des tags (mode entreprise)
   invocation_config {
     included_tags = ["prod"]
+    service_account = var.dataform_sa_email
   }
 }
 

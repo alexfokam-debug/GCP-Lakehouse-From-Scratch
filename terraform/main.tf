@@ -304,6 +304,9 @@ module "iam" {
   project_id        = var.project_id
   environment       = var.environment
   dataproc_sa_email = var.dataproc_sa_email
+  project_number = data.google_project.current.number
+  dataform_sa_email = var.dataform_sa_email
+
 
   tmp_dataset_id = module.bq.tmp_dataset_id
 
@@ -353,6 +356,8 @@ module "dataform" {
   region      = var.region
   environment = var.environment
   repository_name = var.dataform_repository_name
+
+
   # ---------------------------------------------------------------------------
   # Nommage repository Dataform
   # repo_name = ID technique (API)
@@ -384,6 +389,7 @@ module "dataform" {
   labels = merge(var.labels, {
     env = var.environment
   })
+  dataform_sa_email = var.dataform_sa_email
 }
 
 # ============================================================

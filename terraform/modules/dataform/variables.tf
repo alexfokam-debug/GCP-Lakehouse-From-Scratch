@@ -174,3 +174,7 @@ variable "dataform_git_token_secret_version" {
   default     = null
 }
 
+variable "dataform_sa_email" {
+  description = "Email du service account Dataform runtime (ex: sa-dataform-dev@PROJECT.iam.gserviceaccount.com)."
+  type        = string
+}

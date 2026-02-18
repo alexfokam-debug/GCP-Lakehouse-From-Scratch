@@ -195,3 +195,43 @@ resource "google_bigquery_dataset_iam_member" "raw_ext_reader" {
 
   role    = "roles/bigquery.dataViewer"
 }
+###############################################################################
+# Dataform Service Agent - BigQuery Permissions
+###############################################################################
+
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
+resource "google_project_iam_member" "dataform_service_agent_jobuser" {
+  project = var.project_id
+  role    = "roles/bigquery.jobUser"
+  member  = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-dataform.iam.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "dataform_service_agent_user" {
+  project = var.project_id
+  role    = "roles/bigquery.user"
+  member  = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-dataform.iam.gserviceaccount.com"
+}
+
+# Dataform service agent must impersonate runtime SA
+resource "google_service_account_iam_member" "dataform_agent_actas_runtime_sa" {
+  service_account_id = google_service_account.dataform.name
+
+  role   = "roles/iam.serviceAccountTokenCreator"
+
+  member = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-dataform.iam.gserviceaccount.com"
+}
+# Dataform service agent must be able to impersonate the runtime SA (actAs)
+resource "google_service_account_iam_member" "dataform_service_agent_actas_runtime" {
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${var.dataform_sa_email}"
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:service-${var.project_number}@gcp-sa-dataform.iam.gserviceaccount.com"
+}
+# Dataform Service Agent (service-PROJECT_NUMBER) doit pouvoir "actAs" le runtime SA
+resource "google_service_account_iam_member" "dataform_service_agent_actas_runtime_user" {
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${var.dataform_sa_email}"
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:service-${var.project_number}@gcp-sa-dataform.iam.gserviceaccount.com"
+}
