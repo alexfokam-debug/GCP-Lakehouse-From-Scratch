@@ -1,0 +1,29 @@
+config {
+  type: "view",
+  tags: ["prod"],
+
+  // "prod" = ce que ton workflow exécute (included_tags = ["prod"])
+  schema: constants.analyticsDataset,
+  name: "int_orders_enriched"
+}
+
+/**
+ * INTERMEDIATE : commandes enrichies avec infos client
+ * - Tag "prod" => exécuté automatiquement par le workflow planifié
+ */
+
+select
+  o.order_id,
+  o.customer_id,
+  o.order_ts,
+  date(o.order_ts) as order_date,
+  o.amount,
+  o.status,
+
+  c.full_name,
+  c.email,
+  c.country,
+  c.created_ts as customer_created_ts
+from ${ref("stg_orders")} o
+left join ${ref("stg_customers")} c
+  using (customer_id);

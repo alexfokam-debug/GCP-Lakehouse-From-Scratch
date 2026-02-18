@@ -1,0 +1,21 @@
+config {
+  type: "view",
+  tags: ["staging"],
+
+  // Bonne pratique : on met la table dans le dataset analytics_<env>
+  // mais c'est une simple VIEW vers RAW.
+  // => facile à tracer et documenter.
+  schema: constants.analyticsDataset,
+  name: "src_raw_orders"
+}
+
+/**
+ * SOURCE RAW : raw_ext_<env>.orders
+ * - Table externe BigQuery sur GCS (RAW)
+ * - On ne transforme pas ici, on expose juste une vue "source"
+ */
+
+select
+  *
+from
+  `${dataform.projectConfig.defaultDatabase}.${constants.rawDataset}.orders`;

@@ -1,0 +1,16 @@
+config {
+  type: "assertion",
+  tags: ["dq", "staging"]
+}
+
+/*
+  Test qualité simple (entreprise):
+  - id ne doit jamais être NULL
+  - name ne doit jamais être NULL
+
+  Si la requête retourne des lignes => l'assertion échoue.
+*/
+
+SELECT *
+FROM ${ref("stg_sample")}
+WHERE id IS NULL OR name IS NULL;
