@@ -1,27 +1,25 @@
-js {
-  const constants = require("constants");
-}
-
 config {
-  schema: constants.ANALYTICS_DATASET,
-  name: "stg_orders",
   type: "table",
-  tags: ["prod"]
+  schema: "analytics_dev",
+  name: "stg_orders",
+  tags: ["prod"],
+  bigquery: {
+    partitionBy: "order_date",
+    requirePartitionFilter: true
+  }
 }
-
-
-/**
- * STAGING : normalisation des données commandes
- * - TYPAGE
- * - renommage cohérent
- * - suppression des colonnes inutiles
- */
 
 select
-  cast(order_id as string)         as order_id,
-  cast(customer_id as string)      as customer_id,
-  cast(order_ts as timestamp)      as order_ts,
-  cast(amount as numeric)          as amount,
-  cast(status as string)           as status
-from
-  ${ref("src_raw_orders")};
+  -- clés / dimensions
+  cast(order_id as string) as order_id,
+  cast(customer_id as string) as customer_id,
+
+  -- temps
+  timestamp(order_timestamp) as order_timestamp,
+  date(timestamp(order_timestamp)) as order_date,
+
+  -- métriques
+  cast(amount as numeric) as amount
+
+from ${ref("src_raw_orders")}
+where order_id is not null

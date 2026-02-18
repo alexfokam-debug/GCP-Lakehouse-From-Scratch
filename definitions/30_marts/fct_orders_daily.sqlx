@@ -4,35 +4,31 @@ config {
   name: "fct_orders_daily",
   tags: ["prod"],
   uniqueKey: ["order_date", "customer_id"],
-
   bigquery: {
-    partitionBy: "DATE(order_date)",
+    partitionBy: "order_date",
     requirePartitionFilter: true
   }
 }
 
-with base as (
-  select
-    date(order_timestamp) as order_date,
-    customer_id,
-    order_id,
-    cast(amount as numeric) as amount
-  from ${ref("stg_orders")}
-
-  ${when(incremental(),
-    `where date(order_timestamp) >= date_sub(current_date(), interval 7 day)`,
-    ``
-  )}
-),
-
-daily as (
+with daily as (
   select
     order_date,
     customer_id,
     count(distinct order_id) as nb_orders,
     sum(amount) as total_amount
-  from base
+  from ${ref("int_orders_enriched")}
+
+  ${when(incremental(),
+    `where order_date >= date_sub(current_date(), interval 7 day)`,
+    ``
+  )}
+
   group by 1,2
 )
 
-select * from daily
+select
+  order_date,
+  customer_id,
+  nb_orders,
+  total_amount
+from daily
