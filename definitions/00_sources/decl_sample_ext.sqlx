@@ -1,7 +1,6 @@
 config {
   type: "declaration",
-  database: "lakehouse-486419",
-  schema: "raw_ext_${constants.env}",   // => raw_ext_dev
-  name: "sample_ext",
-  tags: ["prod"]
+  database: dataform.projectConfig.defaultDatabase,
+  schema: constants.rawExtDataset,   // => raw_ext_dev
+  name: "sample_ext"
 }

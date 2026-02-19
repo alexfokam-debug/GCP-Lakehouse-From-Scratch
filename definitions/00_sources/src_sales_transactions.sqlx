@@ -1,8 +1,8 @@
 config {
   type: "declaration",
-  schema: "raw_ext_${constants.env}",  // ou raw_ext_dev si tu n’as pas encore env dynamique
-  name: "sales_transactions",
-  tags: ["demo"]  // <-- pas "prod"
+  database: dataform.projectConfig.defaultDatabase,
+  schema: constants.rawExtDataset,
+  name: "sales_transactions"
 }
 
 select
