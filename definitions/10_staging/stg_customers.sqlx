@@ -1,3 +1,7 @@
+js {
+  const constants = require("includes/constants");
+}
+
 config {
   type: "view",
   tags: ["staging"],
@@ -17,4 +21,4 @@ select
   cast(country as string)          as country,
   cast(created_ts as timestamp)    as created_ts
 from
-  ${ref("src_curated_customers_iceberg")};
+  ${ref("src_curated_customers_iceberg")}

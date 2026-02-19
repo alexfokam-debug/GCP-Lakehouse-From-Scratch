@@ -1,3 +1,7 @@
+
+js {
+  const constants = require("includes/constants");
+}
 config {
   type: "table",
   tags: ["prod"],
@@ -23,4 +27,4 @@ select
   email,
   country,
   created_ts
-from ${ref("stg_customers")};
+from ${ref("stg_customers")}

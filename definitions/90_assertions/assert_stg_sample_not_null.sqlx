@@ -13,4 +13,4 @@ config {
 
 SELECT *
 FROM ${ref("stg_sample")}
-WHERE id IS NULL OR name IS NULL;
+WHERE id IS NULL OR name IS NULL

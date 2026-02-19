@@ -29,4 +29,4 @@ SELECT
   CURRENT_TIMESTAMP() AS ingested_at,
   "raw_ext" AS record_source
 FROM ${ref("sample_ext")}
-;
+

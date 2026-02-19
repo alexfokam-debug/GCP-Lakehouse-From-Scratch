@@ -1,35 +1,16 @@
-/**
- * includes/constants.js
- * Centralisation des constantes par environnement.
- * L'environnement est injecté via Terraform ReleaseConfig:
- * vars = { env = var.environment }
- */
+// includes/constants.js
+const env = (dataform.projectConfig.vars && dataform.projectConfig.vars.env) || "dev";
 
-const env =
-  (dataform.projectConfig.vars &&
-    dataform.projectConfig.vars.env) ||
-  "dev";
-
-const PROJECT_ID =
-  dataform.projectConfig.defaultDatabase;
-
-// Export unique et propre
 module.exports = {
-  ENV: env,
-  PROJECT_ID,
+  env,
 
-  // =========================
-  // DATASETS SOURCES
-  // =========================
-  RAW_DATASET: `raw_${env}`,
-  RAW_EXT_DATASET: `raw_ext_${env}`,
+  projectId: dataform.projectConfig.defaultDatabase, // ou "lakehouse-486419"
 
-  CURATED_DATASET: `curated_${env}`,
-  CURATED_EXT_DATASET: `curated_ext_${env}`,
-  CURATED_ICEBERG_DATASET: `curated_iceberg_${env}`,
-
-  // =========================
-  // DATASETS ANALYTICS (marts)
-  // =========================
-  ANALYTICS_DATASET: `analytics_${env}`
+  // datasets (dev/prod)
+  rawExtDataset: `raw_ext_${env}`,
+  curatedExtDataset: `curated_ext_${env}`,
+  curatedDataset: `curated_${env}`,
+  curatedIcebergDataset: `curated_iceberg_${env}`,
+  analyticsDataset: `analytics_${env}`,
+  tmpDataset: `tmp_lakehouse_${env}`
 };

@@ -1,6 +1,10 @@
+js {
+  const constants = require("includes/constants");
+}
+
 config {
   type: "incremental",
-  schema: "analytics_dev",
+  schema: constants.ANALYTICS_DATASET,,
   name: "fct_orders_daily",
   tags: ["prod"],
   uniqueKey: ["order_date", "customer_id"],
@@ -10,25 +14,28 @@ config {
   }
 }
 
-with daily as (
+with base as (
+  select
+    date(order_timestamp) as order_date,
+    customer_id,
+    order_id,
+    cast(amount as numeric) as amount
+  from ${ref("stg_orders")}
+
+  ${when(incremental(),
+    `where date(order_timestamp) >= date_sub(current_date(), interval 7 day)`,
+    ``
+  )}
+),
+
+daily as (
   select
     order_date,
     customer_id,
     count(distinct order_id) as nb_orders,
     sum(amount) as total_amount
-  from ${ref("int_orders_enriched")}
-
-  ${when(incremental(),
-    `where order_date >= date_sub(current_date(), interval 7 day)`,
-    ``
-  )}
-
+  from base
   group by 1,2
 )
 
-select
-  order_date,
-  customer_id,
-  nb_orders,
-  total_amount
-from daily
+select * from daily
