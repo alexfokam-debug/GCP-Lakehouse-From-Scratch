@@ -4,9 +4,10 @@ js {
 
 config {
   type: "declaration",
-  database: constants.PROJECT_ID,
-  schema: constants.RAW_EXT_DATASET,
-  name: "sample_ext"
+  database: "lakehouse-486419",
+  schema: "raw_ext_dev",
+  name: "sample_ext",
+  tags: ["prod"]
 }
 
 /*
