@@ -1,0 +1,10 @@
+js {
+  const constants = require("includes/constants");
+}
+
+config { type: "view", schema: "analytics_dev", name: "zz_env_check", tags: ["prod"] }
+
+select
+  "${constants.env}" as env,
+  "${constants.rawExtDataset}" as raw_ext_dataset,
+  "${constants.analyticsDataset}" as analytics_dataset
