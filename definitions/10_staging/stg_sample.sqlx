@@ -1,6 +1,6 @@
 config {
   type: "table",
-  schema: "analytics_dev",
+  schema: constants.analyticsDataset,   // au lieu de "analytics_dev"
   name: "stg_sample",
   tags: ["prod"]
 }

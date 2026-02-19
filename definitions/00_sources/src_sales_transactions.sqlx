@@ -1,8 +1,8 @@
 config {
-  type: "view",
-  schema: "analytics_dev",
-  name: "src_sales_transactions",
-  tags: ["source", "prod"]
+  type: "declaration",
+  schema: "raw_ext_${constants.env}",  // ou raw_ext_dev si tu n’as pas encore env dynamique
+  name: "sales_transactions",
+  tags: ["demo"]  // <-- pas "prod"
 }
 
 select
