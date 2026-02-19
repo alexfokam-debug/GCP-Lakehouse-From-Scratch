@@ -16,7 +16,6 @@ select
   cast(qty as int64) as qty,
   cast(unit_price as numeric) as unit_price,
 
-  -- IMPORTANT: colonne nommée (sinon erreur CREATE VIEW columns must be named)
   cast(qty as numeric) * cast(unit_price as numeric) as amount,
 
   cast(currency as string) as currency,
@@ -24,5 +23,5 @@ select
 
   cast(ingestion_ts as timestamp) as ingestion_ts,
   current_timestamp() as load_ts
-from ${ref("src_sales_transactions")}
+from ${ref("sales_transactions")}
 where transaction_id is not null
