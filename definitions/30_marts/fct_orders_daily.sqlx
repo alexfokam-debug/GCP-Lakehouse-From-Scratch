@@ -4,7 +4,7 @@ js {
 
 config {
   type: "incremental",
-  schema: constants.ANALYTICS_DATASET,,
+  schema: constants.ANALYTICS_DATASET,
   name: "fct_orders_daily",
   tags: ["prod"],
   uniqueKey: ["order_date", "customer_id"],
