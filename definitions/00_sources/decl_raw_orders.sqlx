@@ -1,0 +1,10 @@
+js {
+  const constants = require("includes/constants");
+}
+
+config {
+  type: "declaration",
+  database: dataform.projectConfig.defaultDatabase,
+  schema: constants.rawExtDataset,
+  name: "orders"
+}
