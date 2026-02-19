@@ -1,6 +1,4 @@
-js {
-  const constants = require("includes/constants");
-}
+const constants = require("includes/constants");
 
 config {
   type: "incremental",

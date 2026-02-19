@@ -1,3 +1,4 @@
+const constants = require("includes/constants");
 config {
   type: "declaration",
   database: dataform.projectConfig.defaultDatabase,

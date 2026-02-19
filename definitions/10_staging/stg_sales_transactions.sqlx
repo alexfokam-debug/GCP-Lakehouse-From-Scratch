@@ -1,6 +1,8 @@
+const constants = require("includes/constants");
+
 config {
   type: "view",
-  schema: "analytics_dev",
+  schema: constants.analyticsDataset,
   name: "stg_sales_transactions",
   tags: ["staging", "prod"]
 }
@@ -9,18 +11,13 @@ select
   cast(transaction_id as string) as transaction_id,
   cast(transaction_ts as timestamp) as transaction_ts,
   cast(order_date as date) as order_date,
-
   cast(customer_id as string) as customer_id,
   cast(product_id as string) as product_id,
-
   cast(qty as int64) as qty,
   cast(unit_price as numeric) as unit_price,
-
   cast(qty as numeric) * cast(unit_price as numeric) as amount,
-
   cast(currency as string) as currency,
   cast(country as string) as country,
-
   cast(ingestion_ts as timestamp) as ingestion_ts,
   current_timestamp() as load_ts
 from ${ref("sales_transactions")}
