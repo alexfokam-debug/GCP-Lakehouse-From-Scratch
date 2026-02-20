@@ -9,7 +9,7 @@ select
   o.order_id,
   o.customer_id,
   o.order_date,
-  o.order_amount,
+  o.amount as order_amount,
 
   s.transaction_id,
   s.amount as transaction_amount,
