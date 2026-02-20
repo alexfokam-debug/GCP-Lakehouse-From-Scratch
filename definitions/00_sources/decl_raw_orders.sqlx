@@ -1,8 +1,0 @@
-config {
-  type: "view",
-  schema: "analytics_dev",
-  name: "src_raw_orders",
-  tags: ["prod"]
-}
-
-select * from ${ref("orders")}

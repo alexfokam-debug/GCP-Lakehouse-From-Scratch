@@ -5,17 +5,4 @@ config {
   tags: ["prod"]
 }
 
-/**
- * SOURCE RAW : raw_ext_<env>.orders
- * - Table externe BigQuery sur GCS (RAW)
- * - On ne transforme pas ici, on expose juste une vue "source"
- */
-
-select
-  -- mapping temporaire, à adapter à ton vrai schéma orders
-  cast(id as string)              as order_id,
-  timestamp(event_ts)             as order_ts,
-  cast(null as string)            as customer_id,
-  cast(amount as numeric)         as order_amount,
-  current_timestamp()             as ingestion_ts
-from ${ref("orders")}
+select * from ${ref("orders")}

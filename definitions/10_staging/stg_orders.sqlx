@@ -5,17 +5,4 @@ config {
   tags: ["staging","prod"]
 }
 
-select
-  -- clés / dimensions
-  cast(order_id as string) as order_id,
-  cast(customer_id as string) as customer_id,
-
-  -- temps
-  timestamp(order_timestamp) as order_timestamp,
-  date(timestamp(order_timestamp)) as order_date,
-
-  -- métriques
-  cast(amount as numeric) as amount
-
-from ${ref("src_raw_orders")}
-where order_id is not null
+select * from ${ref("src_raw_orders")}
