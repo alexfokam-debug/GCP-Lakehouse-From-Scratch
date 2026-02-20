@@ -6,7 +6,7 @@ config {
   uniqueKey: ["order_date", "customer_id"],
   bigquery: {
     partitionBy: "order_date",
-    requirePartitionFilter: true
+    requirePartitionFilter: false
   }
 }
 
