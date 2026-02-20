@@ -1,8 +1,10 @@
+js { const constants = require("includes/constants"); }
+
 config {
   type: "view",
-  schema: "analytics_dev",
-  name: "src_raw_orders",
-  tags: ["prod"]
+  schema: constants.analyticsDataset,   -- ou analytics_dev si tu l’as hardcodé
+  name: "src_raw_orders"
 }
 
-select * from ${ref("orders")}
+select *
+from ${ref("orders")}
