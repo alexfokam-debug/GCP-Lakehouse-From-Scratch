@@ -2,9 +2,10 @@ js { const constants = require("includes/constants"); }
 
 config {
   type: "view",
-  schema: constants.analyticsDataset,   -- ou analytics_dev si tu l’as hardcodé
-  name: "src_raw_orders"
+  schema: "analytics_dev",
+  name: "src_raw_orders",
+  tags: ["prod"]
 }
 
 select *
-from ${ref("orders")}
+from `${dataform.projectConfig.defaultDatabase}.${constants.rawExtDataset}.orders`
