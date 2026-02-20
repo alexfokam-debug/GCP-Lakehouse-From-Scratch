@@ -2,7 +2,7 @@ js { const constants = require("includes/constants"); }
 
 config {
   type: "operations",
-  tags: ["bootstrap", "dev"],
+  tags: ["prod", "bootstrap", "dev"]
   name: "op_disable_rpf_fct_orders_daily"
 }
 
