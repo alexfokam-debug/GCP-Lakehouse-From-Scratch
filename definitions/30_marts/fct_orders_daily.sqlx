@@ -3,6 +3,7 @@ config {
   schema: "analytics_dev",
   name: "fct_orders_daily",
   tags: ["prod"],
+  dependencies: ["op_disable_rpf_fct_orders_daily"],
   uniqueKey: ["order_date", "customer_id"],
   bigquery: {
     partitionBy: "order_date",
