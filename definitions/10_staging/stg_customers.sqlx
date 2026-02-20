@@ -2,12 +2,13 @@ config {
   type: "view",
   schema: "analytics_dev",
   name: "stg_customers",
-  tags: ["staging","prod"]
+  tags: ["staging", "prod"]
 }
 
--- temporaire si tu n'as pas encore de source customer :
-select
-  cast(null as string) as customer_id,
-  cast(null as string) as customer_name,
+select distinct
+  cast(name as string) as customer_id,
+  cast(name as string) as customer_name,
+  min(cast(event_ts as timestamp)) over(partition by cast(name as string)) as created_ts,
   current_timestamp() as load_ts
-where 1=0
+from ${ref("orders")}
+where name is not null

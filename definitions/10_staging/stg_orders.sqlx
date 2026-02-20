@@ -2,7 +2,15 @@ config {
   type: "view",
   schema: "analytics_dev",
   name: "stg_orders",
-  tags: ["staging","prod"]
+  tags: ["staging", "prod"]
 }
 
-select * from ${ref("src_raw_orders")}
+select
+  cast(id as string)                  as order_id,
+  cast(name as string)                as customer_id,
+  cast(event_ts as timestamp)         as order_timestamp,
+  date(cast(event_ts as timestamp))   as order_date,
+  cast(amount as numeric)             as amount,
+  current_timestamp()                 as load_ts
+from ${ref("orders")}
+where id is not null

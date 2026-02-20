@@ -1,8 +1,6 @@
-const constants = require("includes/constants");
-
 config {
   type: "incremental",
-  schema: constants.ANALYTICS_DATASET,
+  schema: "analytics_dev",
   name: "fct_orders_daily",
   tags: ["prod"],
   uniqueKey: ["order_date", "customer_id"],
@@ -14,14 +12,14 @@ config {
 
 with base as (
   select
-    date(order_timestamp) as order_date,
+    order_date,
     customer_id,
     order_id,
     cast(amount as numeric) as amount
   from ${ref("stg_orders")}
 
   ${when(incremental(),
-    `where date(order_timestamp) >= date_sub(current_date(), interval 7 day)`,
+    `where order_date >= date_sub(current_date(), interval 7 day)`,
     ``
   )}
 ),

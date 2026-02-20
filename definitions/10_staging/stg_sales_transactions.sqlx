@@ -2,25 +2,25 @@ config {
   type: "view",
   schema: "analytics_dev",
   name: "stg_sales_transactions",
-  tags: ["staging","prod"]
+  tags: ["staging", "prod"]
 }
 
 select
-  cast(id as string) as transaction_id,
-  timestamp(event_ts) as transaction_ts,
-  date(timestamp(event_ts)) as order_date,
+  cast(id as string)                      as transaction_id,
+  cast(event_ts as timestamp)             as transaction_ts,
+  date(cast(event_ts as timestamp))       as order_date,
 
-  cast(null as string) as customer_id,
-  cast(null as string) as product_id,
+  cast(name as string)                    as customer_id,
+  cast(name as string)                    as product_id,
 
-  cast(1 as int64) as qty,
-  cast(amount as numeric) as unit_price,
-  cast(amount as numeric) as amount,
+  cast(1 as int64)                        as qty,
+  cast(amount as numeric)                 as unit_price,
 
-  cast(null as string) as currency,
-  cast(null as string) as country,
+  cast(amount as numeric)                 as amount,
+  "EUR"                                   as currency,
+  "FR"                                    as country,
 
-  current_timestamp() as ingestion_ts,
-  current_timestamp() as load_ts
+  current_timestamp()                     as ingestion_ts,
+  current_timestamp()                     as load_ts
 from ${ref("sales_transactions")}
 where id is not null

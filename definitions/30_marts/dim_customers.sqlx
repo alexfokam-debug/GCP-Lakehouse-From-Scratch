@@ -1,30 +1,18 @@
-js {
-  const constants = require("includes/constants");
-}
-
 config {
   type: "table",
-  tags: ["prod"],
-  schema: constants.ANALYTICS_DATASET,
+  schema: "analytics_dev",
   name: "dim_customers",
-
-  // Option entreprise : partition / clustering quand utile
-  // (ici juste exemple)
+  tags: ["prod"],
   bigquery: {
-    clusterBy: ["country"]
+    clusterBy: ["customer_id"]
   }
 }
 
-/**
- * DIMENSION : clients
- * - Table BigQuery NATIVE (optimisée pour BI)
- * - Source Iceberg (curated) + staging
- */
-
 select
   customer_id,
-  full_name,
-  email,
-  country,
-  created_ts
+  any_value(customer_name) as full_name,
+  null as email,
+  "FR" as country,
+  min(created_ts) as created_ts
 from ${ref("stg_customers")}
+group by customer_id

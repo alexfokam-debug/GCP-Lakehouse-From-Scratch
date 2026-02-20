@@ -1,26 +1,21 @@
 config {
-  type: "table",
+  type: "view",
   schema: "analytics_dev",
   name: "int_orders_enriched",
-  tags: ["prod"],
-  bigquery: {
-    partitionBy: "order_date",
-    requirePartitionFilter: true
-  }
+  tags: ["intermediate", "prod"]
 }
 
 select
   o.order_id,
   o.customer_id,
-  o.order_timestamp,
   o.order_date,
-  o.amount,
+  o.order_amount,
 
-  -- exemple d'enrichissement simple
-  case
-    when o.amount >= 100 then "high"
-    when o.amount >= 50 then "medium"
-    else "low"
-  end as basket_segment
+  s.transaction_id,
+  s.amount as transaction_amount,
 
+  current_timestamp() as enriched_ts
 from ${ref("stg_orders")} o
+left join ${ref("stg_sales_transactions")} s
+  on s.order_date = o.order_date
+  and s.customer_id = o.customer_id

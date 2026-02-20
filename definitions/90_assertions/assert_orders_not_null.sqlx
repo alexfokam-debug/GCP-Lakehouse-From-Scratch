@@ -1,13 +1,10 @@
 config {
   type: "assertion",
-  tags: ["prod"]
+  schema: "analytics_dev",
+  name: "assert_orders_not_null",
+  tags: ["dq", "prod"]
 }
 
-/**
- * ASSERTION : order_id ne doit jamais être NULL
- */
-
-select
-  *
+select *
 from ${ref("stg_orders")}
 where order_id is null
