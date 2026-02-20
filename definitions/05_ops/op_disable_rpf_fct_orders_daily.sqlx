@@ -3,13 +3,11 @@ js { const constants = require("includes/constants"); }
 config {
   type: "operations",
   tags: ["prod", "bootstrap", "dev"]
-  name: "op_disable_rpf_fct_orders_daily"
 }
 
 ${when(constants.env == "dev", `
 ALTER TABLE \`${dataform.projectConfig.defaultDatabase}.analytics_dev.fct_orders_daily\`
 SET OPTIONS (require_partition_filter = false);
 `, `
--- en staging/prod on ne touche pas
 SELECT 1;
 `)}
