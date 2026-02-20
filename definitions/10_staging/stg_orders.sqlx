@@ -1,12 +1,8 @@
 config {
-  type: "table",
+  type: "view",
   schema: "analytics_dev",
   name: "stg_orders",
-  tags: ["prod"],
-  bigquery: {
-    partitionBy: "order_date",
-    requirePartitionFilter: true
-  }
+  tags: ["staging","prod"]
 }
 
 select

@@ -4,16 +4,10 @@ config {
   name: "stg_customers",
   tags: ["staging","prod"]
 }
-/**
- * STAGING : clients (depuis Iceberg)
- * - Ici on lit curated_ext_<env>.customer (Iceberg externe)
- */
 
+-- temporaire si tu n'as pas encore de source customer :
 select
-  cast(customer_id as string)      as customer_id,
-  cast(full_name as string)        as full_name,
-  cast(email as string)            as email,
-  cast(country as string)          as country,
-  cast(created_ts as timestamp)    as created_ts
-from
-  ${ref("src_curated_customers_iceberg")}
+  cast(null as string) as customer_id,
+  cast(null as string) as customer_name,
+  current_timestamp() as load_ts
+where 1=0

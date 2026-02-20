@@ -1,16 +1,8 @@
-js {
-  const constants = require("includes/constants");
-}
-
 config {
   type: "view",
-  tags: ["prod"],
-
-  // Bonne pratique : on met la table dans le dataset analytics_<env>
-  // mais c'est une simple VIEW vers RAW.
-  // => facile à tracer et documenter.
-  schema: constants.ANALYTICS_DATASET,
-  name: "src_raw_orders"
+  schema: "analytics_dev",
+  name: "src_raw_orders",
+  tags: ["prod"]
 }
 
 /**
