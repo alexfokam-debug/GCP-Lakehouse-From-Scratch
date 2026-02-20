@@ -1,25 +1,26 @@
-js {
-  const constants = require("includes/constants");
-}
 config {
   type: "view",
-  schema: constants.analyticsDataset,
+  schema: "analytics_dev",
   name: "stg_sales_transactions",
-  tags: ["staging", "prod"]
+  tags: ["staging","prod"]
 }
 
 select
-  cast(transaction_id as string) as transaction_id,
-  cast(transaction_ts as timestamp) as transaction_ts,
-  cast(order_date as date) as order_date,
-  cast(customer_id as string) as customer_id,
-  cast(product_id as string) as product_id,
-  cast(qty as int64) as qty,
-  cast(unit_price as numeric) as unit_price,
-  cast(qty as numeric) * cast(unit_price as numeric) as amount,
-  cast(currency as string) as currency,
-  cast(country as string) as country,
-  cast(ingestion_ts as timestamp) as ingestion_ts,
+  cast(id as string) as transaction_id,
+  timestamp(event_ts) as transaction_ts,
+  date(timestamp(event_ts)) as order_date,
+
+  cast(null as string) as customer_id,
+  cast(null as string) as product_id,
+
+  cast(1 as int64) as qty,
+  cast(amount as numeric) as unit_price,
+  cast(amount as numeric) as amount,
+
+  cast(null as string) as currency,
+  cast(null as string) as country,
+
+  current_timestamp() as ingestion_ts,
   current_timestamp() as load_ts
 from ${ref("sales_transactions")}
-where transaction_id is not null
+where id is not null

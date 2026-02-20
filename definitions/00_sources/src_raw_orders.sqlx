@@ -4,7 +4,7 @@ js {
 
 config {
   type: "view",
-  tags: ["staging"],
+  tags: ["prod"],
 
   // Bonne pratique : on met la table dans le dataset analytics_<env>
   // mais c'est une simple VIEW vers RAW.
@@ -20,6 +20,10 @@ config {
  */
 
 select
-  *
-from
-  `${dataform.projectConfig.defaultDatabase}.${constants.RAW_DATASET}.orders`
+  -- mapping temporaire, à adapter à ton vrai schéma orders
+  cast(id as string)              as order_id,
+  timestamp(event_ts)             as order_ts,
+  cast(null as string)            as customer_id,
+  cast(amount as numeric)         as order_amount,
+  current_timestamp()             as ingestion_ts
+from ${ref("orders")}

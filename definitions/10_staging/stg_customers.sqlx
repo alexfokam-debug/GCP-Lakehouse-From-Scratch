@@ -1,11 +1,9 @@
-const constants = require("includes/constants");
 config {
   type: "view",
-  tags: ["staging"],
-  schema: constants.ANALYTICS_DATASET,
-  name: "stg_customers"
+  schema: "analytics_dev",
+  name: "stg_customers",
+  tags: ["staging","prod"]
 }
-
 /**
  * STAGING : clients (depuis Iceberg)
  * - Ici on lit curated_ext_<env>.customer (Iceberg externe)

@@ -1,8 +1,8 @@
-js { const constants = require("includes/constants"); }
-
 config {
-  type: "declaration",
-  database: dataform.projectConfig.defaultDatabase,
-  schema: constants.rawExtDataset,
-  name: "orders"
+  type: "view",
+  schema: "analytics_dev",
+  name: "src_raw_orders",
+  tags: ["prod"]
 }
+
+select * from ${ref("orders")}
