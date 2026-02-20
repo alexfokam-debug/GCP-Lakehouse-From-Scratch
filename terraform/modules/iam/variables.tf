@@ -53,5 +53,11 @@ variable "enable_tmp_dataset" {
   default     = true
 }
 
-variable "project_number"   { type = string }
-variable "dataform_sa_email"{ type = string }
+variable "project_number" { type = string }
+variable "dataform_sa_email" { type = string }
+
+variable "raw_bucket_name" {
+  type        = string
+  description = "Bucket GCS RAW (ex: lakehouse-486419-raw-dev)"
+}
+

@@ -125,8 +125,9 @@ module "bq" {
   environment = var.environment
   location    = var.region
 
-  labels             = var.labels
-  enable_tmp_dataset = var.enable_tmp_dataset
+  labels                              = var.labels
+  enable_tmp_dataset                  = var.enable_tmp_dataset
+  enable_sales_orders_external_tables = var.enable_sales_orders_external_tables
 
 }
 
@@ -304,8 +305,9 @@ module "iam" {
   project_id        = var.project_id
   environment       = var.environment
   dataproc_sa_email = var.dataproc_sa_email
-  project_number = data.google_project.current.number
+  project_number    = data.google_project.current.number
   dataform_sa_email = var.dataform_sa_email
+  raw_bucket_name   = "lakehouse-${var.project_id_short}-raw-${var.environment}"
 
 
   tmp_dataset_id = module.bq.tmp_dataset_id
@@ -352,9 +354,9 @@ module "dataform" {
   # ---------------------------------------------------------------------------
   # Contexte projet / région / env
   # ---------------------------------------------------------------------------
-  project_id  = var.project_id
-  region      = var.region
-  environment = var.environment
+  project_id      = var.project_id
+  region          = var.region
+  environment     = var.environment
   repository_name = var.dataform_repository_name
 
 
@@ -658,4 +660,21 @@ module "gcs_dataproc_temp" {
   domain       = var.domain
   dataset_name = var.dataset_name
   bucket_name  = "lakehouse-${var.project_id}-dataproc-temp-${var.environment}" # ⚠️ adapte selon ton naming réel
+}
+
+# -------------------------------------------------------------------
+# BOOTSTRAP FILES (DEV) - pour que BigQuery external tables matchent
+# -------------------------------------------------------------------
+resource "google_storage_bucket_object" "bootstrap_orders_parquet" {
+  count  = var.enable_sales_orders_external_tables ? 1 : 0
+  name   = "domain=${var.domain}/dataset=orders/orders_0001.parquet"
+  bucket = module.gcs_raw.bucket_name # ou le nom exact du bucket raw
+  source = "${path.module}/../data/sample.parquet"
+}
+
+resource "google_storage_bucket_object" "bootstrap_sales_transactions_parquet" {
+  count  = var.enable_sales_orders_external_tables ? 1 : 0
+  name   = "domain=${var.domain}/dataset=sales_transactions/sales_transactions_0001.parquet"
+  bucket = module.gcs_raw.bucket_name
+  source = "${path.module}/../data/sample.parquet"
 }

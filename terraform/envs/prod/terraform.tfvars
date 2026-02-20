@@ -14,7 +14,6 @@ environment  = "prod"
 region       = "europe-west1"
 domain       = "sales"
 dataset_name = "sample"
-project_id_short = "486419"                 # <-- ajouté pour standardiser les noms
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +87,7 @@ enable_tmp_dataset = true
 # ---------------------------------------------------------------------------
 # var.env (si utilisé)
 # ---------------------------------------------------------------------------
-env = "prd"
+env            = "prd"
 enable_samples = true
 # Utilisé dans les noms de buckets:
 # lakehouse-<project_id_short>-raw-staging

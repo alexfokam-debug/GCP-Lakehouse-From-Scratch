@@ -191,3 +191,9 @@ variable "dataform_repository_name" {
   type        = string
   description = "Nom du repository Dataform (ex: lakehouse-dev-dataform)"
 }
+
+variable "enable_sales_orders_external_tables" {
+  type        = bool
+  description = "Create external external tables for orders and sales_transactions only if data exists."
+  default     = false
+}

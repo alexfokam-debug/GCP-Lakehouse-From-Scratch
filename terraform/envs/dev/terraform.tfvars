@@ -27,22 +27,34 @@ labels = {
 raw_external_tables = {
   sample_ext = {
     source_format = "PARQUET"
-
-    # On donne un URI simple (sans multi-asterisks)
-    # Ici on cible tout sous dataset=sample/
     source_uris = [
-      # Pattern GCS: <bucket-raw-ENV>/domain=<domain>/dataset=<dataset_name>/...
       "gs://lakehouse-486419-raw-dev/domain=sales/dataset=sample/*"
     ]
-
-    # Racine des partitions hive (key=value)
     hive_source_prefix       = "gs://lakehouse-486419-raw-dev/domain=sales/dataset=sample/"
+    require_partition_filter = false
+  }
+
+  orders = {
+    source_format = "PARQUET"
+    source_uris = [
+      "gs://lakehouse-486419-raw-dev/domain=sales/dataset=orders/*"
+    ]
+    hive_source_prefix       = "gs://lakehouse-486419-raw-dev/domain=sales/dataset=orders/"
+    require_partition_filter = false
+  }
+
+  sales_transactions = {
+    source_format = "PARQUET"
+    source_uris = [
+      "gs://lakehouse-486419-raw-dev/domain=sales/dataset=sales_transactions/*"
+    ]
+    hive_source_prefix       = "gs://lakehouse-486419-raw-dev/domain=sales/dataset=sales_transactions/"
     require_partition_filter = false
   }
 }
 
-dataform_git_repo_url             = "https://github.com/alexfokam-debug/GCP-Lakehouse-From-Scratch.git"
-dataform_default_branch           = "main"
+dataform_git_repo_url   = "https://github.com/alexfokam-debug/GCP-Lakehouse-From-Scratch.git"
+dataform_default_branch = "main"
 # NOTE ENTERPRISE (multi-project):
 # - Ici, le Secret Manager est dans le projet numéro 518653594867.
 # - En Option B (multi-projet), tu as 2 stratégies :
@@ -95,5 +107,6 @@ enable_samples = true
 
 project_id_short = "486419"
 
-dataform_sa_email = "sa-dataform-dev@lakehouse-486419.iam.gserviceaccount.com"
-dataform_repository_name = "lakehouse-dev-dataform"
+dataform_sa_email                   = "sa-dataform-dev@lakehouse-486419.iam.gserviceaccount.com"
+dataform_repository_name            = "lakehouse-dev-dataform"
+enable_sales_orders_external_tables = true

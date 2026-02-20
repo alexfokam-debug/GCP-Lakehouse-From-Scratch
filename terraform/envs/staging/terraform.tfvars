@@ -48,8 +48,8 @@ raw_external_tables = {
 # ---------------------------------------------------------------------------
 # Dataform (repo + secret token)
 # ---------------------------------------------------------------------------
-dataform_git_repo_url     = "https://github.com/alexfokam-debug/GCP-Lakehouse-From-Scratch.git"
-dataform_default_branch   = "main"
+dataform_git_repo_url   = "https://github.com/alexfokam-debug/GCP-Lakehouse-From-Scratch.git"
+dataform_default_branch = "main"
 
 # Stratégie actuelle : secret centralisé (projet 518653594867)
 # (Tu peux dupliquer le secret dans stg/prd plus tard)

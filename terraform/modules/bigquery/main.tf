@@ -45,3 +45,24 @@ resource "google_bigquery_dataset" "tmp_lakehouse" {
     environment = var.environment
   })
 }
+
+resource "google_bigquery_table" "raw_external" {
+  for_each   = tomap(local.raw_table_cfg)
+  project    = var.project_id
+  dataset_id = "raw_ext_${var.environment}"
+  table_id   = each.key
+
+  deletion_protection = false
+
+  external_data_configuration {
+    source_format = each.value.source_format
+    source_uris   = each.value.source_uris
+    autodetect    = each.value.autodetect
+
+    hive_partitioning_options {
+      mode                     = "AUTO"
+      source_uri_prefix        = each.value.hive_source_prefix
+      require_partition_filter = each.value.require_partition_filter
+    }
+  }
+}

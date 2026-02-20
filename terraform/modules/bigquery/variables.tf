@@ -36,3 +36,22 @@ variable "enable_tmp_dataset" {
   type        = bool
   default     = true
 }
+variable "raw_external_tables" {
+  description = "External tables definitions (BigQuery external tables backed by GCS)"
+  type = map(object({
+    source_format = string
+    source_uris   = list(string)
+    autodetect    = optional(bool, true)
+
+    hive_source_prefix       = optional(string)
+    require_partition_filter = optional(bool, false)
+  }))
+  default = {}
+}
+
+variable "enable_sales_orders_external_tables" {
+  type        = bool
+  description = "Create external tables for orders and sales_transactions only when files exist in GCS."
+  default     = false
+}
+

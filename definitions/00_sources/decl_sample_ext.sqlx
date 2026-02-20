@@ -1,8 +1,8 @@
-const constants = require("includes/constants");
+js { const constants = require("includes/constants"); }
 
 config {
   type: "declaration",
-  database: constants.projectId,
+  database: dataform.projectConfig.defaultDatabase,
   schema: constants.rawExtDataset,
   name: "sample_ext"
 }

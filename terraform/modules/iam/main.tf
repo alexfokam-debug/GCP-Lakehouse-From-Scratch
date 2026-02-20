@@ -191,9 +191,9 @@ resource "google_bigquery_dataset_iam_member" "raw_ext_reader" {
   project = var.project_id
 
   # Service Account Dataproc runtime
-  member  = "serviceAccount:sa-dataproc-${var.environment}@${var.project_id}.iam.gserviceaccount.com"
+  member = "serviceAccount:sa-dataproc-${var.environment}@${var.project_id}.iam.gserviceaccount.com"
 
-  role    = "roles/bigquery.dataViewer"
+  role = "roles/bigquery.dataViewer"
 }
 ###############################################################################
 # Dataform Service Agent - BigQuery Permissions
@@ -219,7 +219,7 @@ resource "google_project_iam_member" "dataform_service_agent_user" {
 resource "google_service_account_iam_member" "dataform_agent_actas_runtime_sa" {
   service_account_id = google_service_account.dataform.name
 
-  role   = "roles/iam.serviceAccountTokenCreator"
+  role = "roles/iam.serviceAccountTokenCreator"
 
   member = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-dataform.iam.gserviceaccount.com"
 }
@@ -234,4 +234,9 @@ resource "google_service_account_iam_member" "dataform_service_agent_actas_runti
   service_account_id = "projects/${var.project_id}/serviceAccounts/${var.dataform_sa_email}"
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:service-${var.project_number}@gcp-sa-dataform.iam.gserviceaccount.com"
+}
+resource "google_storage_bucket_iam_member" "dataform_raw_viewer" {
+  bucket = var.raw_bucket_name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${var.dataform_sa_email}"
 }
