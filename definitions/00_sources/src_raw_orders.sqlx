@@ -4,8 +4,17 @@ config {
   type: "view",
   schema: "analytics_dev",
   name: "src_raw_orders",
-  tags: ["prod"]
+  tags: ["source", "prod"]
 }
 
-select *
-from `${dataform.projectConfig.defaultDatabase}.${constants.rawExtDataset}.orders`
+-- orders = déclaration qui pointe vers raw_ext_<env>.orders (external table)
+select
+  -- ton parquet sample.parquet a très probablement id/name/amount/event_ts
+  cast(id as string)         as order_id,
+  cast(name as string)       as order_name,
+  cast(amount as numeric)    as order_amount,
+  timestamp(event_ts)        as order_ts,
+
+  current_timestamp() as load_ts,
+  "raw_ext" as record_source
+from ${ref("orders")}
