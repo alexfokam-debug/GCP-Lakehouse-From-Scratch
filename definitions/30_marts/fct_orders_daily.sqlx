@@ -6,9 +6,9 @@ config {
   dependencies: ["op_disable_rpf_fct_orders_daily"],
   uniqueKey: ["order_date", "customer_id"],
   bigquery: {
-    partitionBy: "order_date",
-    requirePartitionFilter: false
-  }
+      partitionBy: "order_date",
+      requirePartitionFilter: ${constants.env == "prod"}
+    }
 }
 
 with base as (

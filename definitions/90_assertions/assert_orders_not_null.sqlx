@@ -6,5 +6,5 @@ config {
 }
 
 select *
-from ${ref("stg_orders")}
+from ${ref("enterprise_orders_daily")}
 where order_id is null

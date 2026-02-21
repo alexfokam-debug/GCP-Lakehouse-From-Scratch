@@ -66,3 +66,14 @@ resource "google_bigquery_table" "raw_external" {
     }
   }
 }
+
+resource "google_bigquery_dataset" "enterprise" {
+  dataset_id = "enterprise_${var.environment}"
+  project    = var.project_id
+  location   = var.location
+
+  labels = merge(var.labels, {
+    environment = var.environment
+    layer       = "enterprise"
+  })
+}

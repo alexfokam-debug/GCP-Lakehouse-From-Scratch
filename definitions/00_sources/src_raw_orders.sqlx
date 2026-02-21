@@ -2,9 +2,9 @@ js { const constants = require("includes/constants"); }
 
 config {
   type: "view",
-  schema: "analytics_dev",
+  schema: constants.analyticsDataset,
   name: "src_raw_orders",
-  tags: ["source", "prod"]
+  tags: ["dev", "prod"]
 }
 
 -- orders = déclaration qui pointe vers raw_ext_<env>.orders (external table)
@@ -17,4 +17,4 @@ select
 
   current_timestamp() as load_ts,
   "raw_ext" as record_source
-from ${ref("orders")}
+from `${dataform.projectConfig.defaultDatabase}.${constants.rawExtDataset}.orders`

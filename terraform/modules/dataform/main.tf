@@ -86,7 +86,6 @@ resource "google_dataform_repository_release_config" "prod_release" {
 # - Lun → Ven en prod (pas le week-end)
 # - Exécuter seulement certains tags (ex: "prod")
 # =============================================================================
-
 resource "google_dataform_repository_workflow_config" "prod_weekdays" {
   provider = google-beta
 
@@ -133,4 +132,20 @@ data "google_secret_manager_secret_version" "git_token_latest" {
   secret  = var.git_token_secret_id
   version = "latest"
 }
+resource "google_dataform_repository_workflow_config" "dev_on_demand" {
+  provider = google-beta
+
+  project    = var.project_id
+  region     = var.region
+  repository = google_dataform_repository.this.name
+  name       = "wf-dev-on-demand"
+
+  release_config = google_dataform_repository_release_config.prod_release.id
+
+  invocation_config {
+    included_tags   = ["dev"]
+    service_account = var.dataform_sa_email
+  }
+}
+
 

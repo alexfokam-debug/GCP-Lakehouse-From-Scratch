@@ -61,3 +61,7 @@ variable "raw_bucket_name" {
   description = "Bucket GCS RAW (ex: lakehouse-486419-raw-dev)"
 }
 
+variable "enterprise_dataset_id" {
+  type        = string
+  description = "Enterprise dataset id created by bigquery module"
+}

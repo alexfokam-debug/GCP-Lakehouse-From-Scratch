@@ -1,0 +1,18 @@
+js { const constants = require("includes/constants"); }
+
+config {
+  type: "table",
+  schema: constants.enterpriseDataset,  -- enterprise_dev
+  name: "enterprise_orders_daily",
+  tags: ["prod"],
+  bigquery: {
+    partitionBy: "order_date"
+  }
+}
+
+select
+  order_date,
+  customer_id,
+  nb_orders,
+  total_amount
+from `${dataform.projectConfig.defaultDatabase}.${constants.analyticsDataset}.fct_orders_daily`

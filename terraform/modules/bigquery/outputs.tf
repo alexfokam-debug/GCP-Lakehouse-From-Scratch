@@ -23,3 +23,6 @@ output "biglake_connection_id" {
   description = "Full BigQuery BigLake connection ID"
   value       = google_bigquery_connection.biglake.id
 }
+output "enterprise_dataset_id" {
+  value = google_bigquery_dataset.enterprise.dataset_id
+}

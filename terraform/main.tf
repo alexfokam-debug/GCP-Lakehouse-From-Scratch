@@ -302,12 +302,16 @@ resource "google_bigquery_dataset" "analytics" {
 module "iam" {
   source = "./modules/iam"
 
-  project_id        = var.project_id
-  environment       = var.environment
-  dataproc_sa_email = var.dataproc_sa_email
-  project_number    = data.google_project.current.number
-  dataform_sa_email = var.dataform_sa_email
-  raw_bucket_name   = "lakehouse-${var.project_id_short}-raw-${var.environment}"
+  project_id            = var.project_id
+  environment           = var.environment
+  dataproc_sa_email     = var.dataproc_sa_email
+  project_number        = data.google_project.current.number
+  dataform_sa_email     = var.dataform_sa_email
+  raw_bucket_name       = "lakehouse-${var.project_id_short}-raw-${var.environment}"
+  depends_on            = [module.bq]
+  enterprise_dataset_id = module.bq.enterprise_dataset_id
+
+
 
 
   tmp_dataset_id = module.bq.tmp_dataset_id

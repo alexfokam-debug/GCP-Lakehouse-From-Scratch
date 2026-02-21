@@ -1,6 +1,6 @@
 config {
   type: "view",
-  schema: "analytics_dev",
+  schema: constants.analyticsDataset,
   name: "stg_orders",
   tags: ["staging", "prod"]
 }
@@ -12,5 +12,5 @@ select
   date(cast(event_ts as timestamp))   as order_date,
   cast(amount as numeric)             as amount,
   current_timestamp()                 as load_ts
-from ${ref("orders")}
+from ${ref("src_raw_orders")}
 where id is not null

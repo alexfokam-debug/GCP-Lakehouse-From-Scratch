@@ -240,3 +240,14 @@ resource "google_storage_bucket_iam_member" "dataform_raw_viewer" {
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${var.dataform_sa_email}"
 }
+resource "google_bigquery_dataset_iam_member" "enterprise_editor_dataform" {
+  project    = var.project_id
+  dataset_id = "enterprise_${var.environment}"
+  role       = "roles/bigquery.dataEditor"
+  member     = "serviceAccount:${var.dataform_sa_email}"
+}
+
+resource "time_sleep" "wait_enterprise_dataset" {
+  depends_on      = [google_bigquery_dataset_iam_member.analytics_editor]
+  create_duration = "10s"
+}
