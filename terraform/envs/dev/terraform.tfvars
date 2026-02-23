@@ -110,3 +110,4 @@ project_id_short = "486419"
 dataform_sa_email                   = "sa-dataform-dev@lakehouse-486419.iam.gserviceaccount.com"
 dataform_repository_name            = "lakehouse-dev-dataform"
 enable_sales_orders_external_tables = true
+github_repository                   = "alexfokam-debug/GCP-Lakehouse-From-Scratch"

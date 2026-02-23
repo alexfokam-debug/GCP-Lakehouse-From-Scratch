@@ -65,3 +65,9 @@ variable "enterprise_dataset_id" {
   type        = string
   description = "Enterprise dataset id created by bigquery module"
 }
+
+# Repo GitHub autorisé (sécurité WIF)
+variable "github_repository" {
+  type        = string
+  description = "GitHub repository in the form owner/repo"
+}

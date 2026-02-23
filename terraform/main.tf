@@ -310,6 +310,7 @@ module "iam" {
   raw_bucket_name       = "lakehouse-${var.project_id_short}-raw-${var.environment}"
   depends_on            = [module.bq]
   enterprise_dataset_id = module.bq.enterprise_dataset_id
+  github_repository     = var.github_repository
 
 
 
