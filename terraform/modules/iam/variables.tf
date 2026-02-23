@@ -71,3 +71,7 @@ variable "github_repository" {
   type        = string
   description = "GitHub repository in the form owner/repo"
 }
+variable "tf_state_bucket_name" {
+  type        = string
+  description = "Name of the Terraform remote state bucket"
+}

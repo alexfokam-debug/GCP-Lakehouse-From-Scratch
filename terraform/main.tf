@@ -311,6 +311,7 @@ module "iam" {
   depends_on            = [module.bq]
   enterprise_dataset_id = module.bq.enterprise_dataset_id
   github_repository     = var.github_repository
+  tf_state_bucket_name  = var.tf_state_bucket_name
 
 
 

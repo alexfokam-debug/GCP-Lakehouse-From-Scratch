@@ -197,10 +197,11 @@ variable "enable_sales_orders_external_tables" {
   description = "Create external external tables for orders and sales_transactions only if data exists."
   default     = false
 }
-
-
-
 variable "github_repository" {
   type        = string
   description = "GitHub repository allowed to use Workload Identity Federation (owner/repo)"
+}
+variable "tf_state_bucket_name" {
+  type        = string
+  description = "Name of the Terraform remote state bucket"
 }

@@ -111,3 +111,4 @@ dataform_sa_email                   = "sa-dataform-dev@lakehouse-486419.iam.gser
 dataform_repository_name            = "lakehouse-dev-dataform"
 enable_sales_orders_external_tables = true
 github_repository                   = "alexfokam-debug/GCP-Lakehouse-From-Scratch"
+tf_state_bucket_name = "lakehouse-dev-tf-state"

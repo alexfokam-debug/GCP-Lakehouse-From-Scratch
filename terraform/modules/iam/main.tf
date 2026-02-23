@@ -251,3 +251,10 @@ resource "time_sleep" "wait_enterprise_dataset" {
   depends_on      = [google_bigquery_dataset_iam_member.analytics_editor]
   create_duration = "10s"
 }
+resource "google_storage_bucket_iam_member" "github_tf_state_access" {
+  bucket = var.tf_state_bucket_name  # ex: lakehouse-dev-tf-state
+
+  role   = "roles/storage.objectAdmin"
+
+  member = "serviceAccount:${google_service_account.github_cicd.email}"
+}
