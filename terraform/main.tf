@@ -312,9 +312,7 @@ module "iam" {
   enterprise_dataset_id = module.bq.enterprise_dataset_id
   github_repository     = var.github_repository
   tf_state_bucket_name  = var.tf_state_bucket_name
-
-
-
+  bootstrap_ci_iam = var.bootstrap_ci_iam
 
   tmp_dataset_id = module.bq.tmp_dataset_id
 

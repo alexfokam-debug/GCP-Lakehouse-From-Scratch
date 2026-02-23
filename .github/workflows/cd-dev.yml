@@ -46,9 +46,12 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          token_format: "access_token"
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+            token_format: "access_token"
+            project_id: ${{ secrets.GCP_PROJECT_ID }}
+            workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+            service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+            create_credentials_file: true
+            export_environment_variables: true
 
       # --------------------------------------------------------------------------
       # 3) Setup gcloud (utile pour debug + certaines commandes)
@@ -59,13 +62,19 @@ jobs:
       # --------------------------------------------------------------------------
       # 4) Vérification d’auth (debug)
       # --------------------------------------------------------------------------
-      - name: Verify gcloud auth
+      - name: Verify identity + backend bucket access
         run: |
+          echo "== gcloud auth list =="
           gcloud auth list
+          echo "== project =="
           gcloud config set project "${{ secrets.GCP_PROJECT_ID }}"
           gcloud config get-value project
+          echo "== check TF state bucket =="
+          gcloud storage ls gs://lakehouse-terraform-states-486419 || true
+          gcloud storage ls gs://lakehouse-terraform-states-486419/gcp-lakehouse/dev/ || true
+        
 
-      # --------------------------------------------------------------------------
+        # --------------------------------------------------------------------------
       # 5) Setup Terraform
       # --------------------------------------------------------------------------
       - name: Setup Terraform

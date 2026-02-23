@@ -75,3 +75,8 @@ variable "tf_state_bucket_name" {
   type        = string
   description = "Name of the Terraform remote state bucket"
 }
+variable "bootstrap_ci_iam" {
+  type    = bool
+  default = false
+}
+
