@@ -328,6 +328,13 @@ module "iam" {
   dataproc_temp_bucket_name = module.gcs_dataproc_temp.bucket_name
   enable_tmp_dataset        = var.enable_tmp_dataset
 }
+# Donne à la SA GitHub CI/CD le droit de lire le secret (versions/latest)
+resource "google_secret_manager_secret_iam_member" "github_cicd_can_read_dataform_git_token" {
+  project   = var.project_id
+  secret_id = "dataform-git-token"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${module.iam.github_cicd_sa_email}"
+}
 
 ###############################################################################
 # Module DATAFORM (ROOT)
