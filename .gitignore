@@ -10,9 +10,12 @@ terraform/.terraform.lock.hcl
 *.tfstate.*
 
 # ---- Python / venv ----
-.venv/
 **/__pycache__/
 *.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
 
 # ---- Local data / temp ----
 data/
@@ -46,3 +49,4 @@ override.tf.json
 # Python
 .env
 pip-wheel-metadata/
+
