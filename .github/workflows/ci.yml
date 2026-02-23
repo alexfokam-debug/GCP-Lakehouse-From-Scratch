@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  terraform-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Checkout code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 3) Terraform format check (enterprise hygiene)
+      - name: Terraform fmt check
+        working-directory: terraform
+        run: terraform fmt -check -recursive
+
+      # 4) Terraform init (dev backend)
+      - name: Terraform init (dev)
+        working-directory: terraform
+        run: terraform init -reconfigure -backend-config=envs/dev/backend.hcl
+
+      # 5) Terraform validate
+      - name: Terraform validate
+        working-directory: terraform
+        run: terraform validate
+
+      # 6) Terraform plan (NO APPLY)
+      # NOTE : ici pas d'auth -> plan peut échouer si data sources / remote require auth.
+      # Option entreprise : faire un plan "offline" ou activer WIF même en CI.
+      - name: Terraform plan (dev) - best effort
+        working-directory: terraform
+        run: terraform plan -var-file=envs/dev/terraform.tfvars || true

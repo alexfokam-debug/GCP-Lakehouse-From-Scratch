@@ -272,32 +272,92 @@ doctor:
 
 
 # ==========================================
-# Dataform orchestration (Python)
+# Dataform orchestration (Python) — ENTERPRISE (dev/prod safe)
 # ==========================================
+# Objectif:
+#   - ENV=dev  -> exécute wf-dev-on-demand (tags=["dev"])
+#   - ENV=prod -> exécute wf-prod-weekdays (tags=["prod"])
+#   - Possibilité de forcer un workflow: WORKFLOW=wf-xxxx
+#
+# Pourquoi ?
+#   - Empêche d’exécuter "prod" par erreur quand tu penses être en dev
+#   - Permet un usage CI/CD simple et reproductible
+#
+# Usage:
+#   make dataform-run ENV=dev
+#   make dataform-run ENV=prod
+#   make dataform-run ENV=dev WORKFLOW=wf-prod-weekdays   # (si tu veux forcer)
+# ------------------------------------------
 
+.PHONY: dataform-run dataform-run-dev dataform-run-prod \
+        bq-test-curated upload-sample bq-fix-dataset-access bq-test e2e
+
+# ---- Workflow "par défaut" selon ENV (safe mapping) ----
+# Note: := évalue immédiatement, donc stable.
+ifeq ($(ENV),dev)
+DATAFORM_WORKFLOW_DEFAULT := wf-dev-on-demand
+endif
+
+ifeq ($(ENV),staging)
+# Tu peux soit réutiliser le dev-on-demand, soit créer un wf-staging
+# Pour l'instant on pointe sur dev-on-demand pour éviter le prod.
+DATAFORM_WORKFLOW_DEFAULT := wf-dev-on-demand
+endif
+
+ifeq ($(ENV),prod)
+DATAFORM_WORKFLOW_DEFAULT := wf-prod-weekdays
+endif
+
+# ---- Workflow réellement utilisé ----
+# Si WORKFLOW est fourni, il écrase la valeur par défaut.
+WORKFLOW ?= $(DATAFORM_WORKFLOW_DEFAULT)
+
+# ---- Dataform runner (ENV-aware) ----
+# On passe:
+#   --env      : pour charger la conf env côté python
+#   --workflow : pour choisir wf-dev-on-demand vs wf-prod-weekdays
+#   --timeout / --poll : contrôle d’exécution
+dataform-run:
+	@echo "==> Dataform RUN"
+	@echo "    ENV=$(ENV)"
+	@echo "    WORKFLOW=$(WORKFLOW)"
+	@$(PYTHON_BIN) -m scripts.run_dataform_workflow_env \
+	  --env $(ENV) \
+	  --workflow $(WORKFLOW) \
+	  --timeout-sec 1800 \
+	  --poll-sec 10
+
+# Raccourcis explicites (plus lisibles)
+dataform-run-dev:
+	@$(MAKE) dataform-run ENV=dev
+
+dataform-run-prod:
+	@$(MAKE) dataform-run ENV=prod
+
+# ---- Tests BigQuery (curated) ----
+# Un seul target "bq-test-curated" (tu l'avais 2 fois -> warnings)
 bq-test-curated:
-	python scripts/test_bigquery_curated_table.py \
-	  --project $(PROJECT_ID) \
-	  --dataset curated_$(ENV) \
+	@echo "==> BQ test curated table (ENV=$(ENV))"
+	@$(PYTHON_BIN) -m scripts.test_bigquery_curated_table_env \
+	  --env $(ENV) \
 	  --table stg_sample \
-	  --region $(LOCATION) \
 	  --min-rows 1 \
 	  --limit 5
 
 upload-sample:
-	python scripts/upload_sample_to_gcs_env.py --env $(ENV)
+	@echo "==> Upload sample to GCS (ENV=$(ENV))"
+	@$(PYTHON_BIN) scripts/upload_sample_to_gcs_env.py --env $(ENV)
 
 bq-fix-dataset-access:
-	python scripts/fix_bq_dataset_access_env.py --env $(ENV) --dataset curated_$(ENV)
+	@echo "==> Fix dataset access (ENV=$(ENV))"
+	@$(PYTHON_BIN) scripts/fix_bq_dataset_access_env.py --env $(ENV) --dataset curated_$(ENV)
 
 bq-test:
-	python -m scripts.test_bigquery_external_table_env --env $(ENV) --table sample_ext --limit 5
+	@echo "==> BQ test external table (ENV=$(ENV))"
+	@$(PYTHON_BIN) -m scripts.test_bigquery_external_table_env --env $(ENV) --table sample_ext --limit 5
 
-dataform-run:
-	python -m scripts.run_dataform_workflow_env --env $(ENV) --timeout-sec 1800 --poll-sec 10
+# ---- End-to-end ----
+# Exemple: exécute Dataform puis vérifie une table curated
 e2e:
-	$(MAKE) dataform-run
-	$(MAKE) bq-test-curated
-
-bq-test-curated:
-	python -m scripts.test_bigquery_curated_table_env --env $(ENV) --table stg_sample --min-rows 1 --limit 5
+	@$(MAKE) dataform-run ENV=$(ENV)
+	@$(MAKE) bq-test-curated ENV=$(ENV)

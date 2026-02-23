@@ -1,0 +1,51 @@
+name: terraform-dev
+
+on:
+  # Déclenchement manuel (propre pour commencer)
+  workflow_dispatch:
+
+  # Option pro: lancer le plan sur PR
+  # pull_request:
+  #   branches: [ "main" ]
+
+permissions:
+  # OBLIGATOIRE pour demander un token OIDC
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    env:
+      ENV: dev
+
+    steps:
+      # 1) Checkout du repo
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) Auth GCP via WIF (PAS de clé JSON)
+      - name: Auth to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          # Ton provider Terraform output
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          # Ton service account CI/CD
+          service_account: ${{ secrets.GCP_TF_SA_EMAIL }}
+
+      # 3) Installer Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 4) Terraform Init (backend GCS)
+      - name: Terraform init
+        run: make tf-init ENV=${ENV}
+
+      # 5) Terraform plan
+      - name: Terraform plan
+        run: make tf-plan ENV=${ENV}
+
+      # 6) Terraform apply (à activer après validation)
+      # - name: Terraform apply
+      #   run: make tf-apply ENV=${ENV}

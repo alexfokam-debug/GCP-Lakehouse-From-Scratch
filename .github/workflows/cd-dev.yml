@@ -1,0 +1,63 @@
+name: CD-DEV
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  id-token: write   # OBLIGATOIRE pour OIDC/WIF
+  actions: read
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) Auth GCP via WIF (ZERO secret JSON)
+      # IMPORTANT :
+      # - workload_identity_provider = output terraform
+      # - service_account = SA créé par terraform (sa-github-cicd-dev@...)
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: "access_token"
+          workload_identity_provider: "projects/LA_TON_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool-dev/providers/github-provider-dev"
+          service_account: "sa-github-cicd-dev@lakehouse-486419.iam.gserviceaccount.com"
+
+      # 3) Setup gcloud
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      # 4) Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 5) Terraform apply DEV
+      - name: Terraform apply (dev)
+        working-directory: terraform
+        run: |
+          terraform init -reconfigure -backend-config=envs/dev/backend.hcl
+          terraform apply -auto-approve -var-file=envs/dev/terraform.tfvars
+
+      # 6) Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 7) Install minimal deps for runner
+      - name: Install python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || true
+          pip install google-auth requests pyyaml
+
+      # 8) Run Dataform DEV (tags=dev)
+      - name: Dataform run (dev)
+        run: |
+          make dataform-run ENV=dev
