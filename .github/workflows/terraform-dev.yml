@@ -1,15 +1,17 @@
 name: terraform-dev
 
+# ------------------------------------------------------------------------------
+# Déclenchement manuel (propre pour commencer / pour éviter les apply automatiques)
+# ------------------------------------------------------------------------------
 on:
-  # Déclenchement manuel (propre pour commencer)
   workflow_dispatch:
 
-  # Option pro: lancer le plan sur PR
-  # pull_request:
-  #   branches: [ "main" ]
-
+# ------------------------------------------------------------------------------
+# Permissions minimales :
+# - id-token: write  -> OBLIGATOIRE pour OIDC/WIF
+# - contents: read   -> checkout du code
+# ------------------------------------------------------------------------------
 permissions:
-  # OBLIGATOIRE pour demander un token OIDC
   id-token: write
   contents: read
 
@@ -17,35 +19,72 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
 
+    # ----------------------------------------------------------------------------
+    # Variables d'environnement du job
+    # ENV=dev pilote ton Makefile (tf-init/tf-plan/tf-apply)
+    # ----------------------------------------------------------------------------
     env:
       ENV: dev
 
     steps:
-      # 1) Checkout du repo
+      # --------------------------------------------------------------------------
+      # 1) Checkout
+      # --------------------------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2) Auth GCP via WIF (PAS de clé JSON)
-      - name: Auth to Google Cloud (WIF)
+      # --------------------------------------------------------------------------
+      # 2) Auth Google Cloud via WIF (zéro clé JSON)
+      #
+      # IMPORTANT :
+      # - On utilise les mêmes secrets partout (pas de doublon)
+      # - workload_identity_provider doit être le FULL NAME (projects/5186.../providers/...)
+      # --------------------------------------------------------------------------
+      - name: Authenticate to Google Cloud (WIF)
         uses: google-github-actions/auth@v2
         with:
-          # Ton provider Terraform output
+          token_format: "access_token"
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          # Ton service account CI/CD
-          service_account: ${{ secrets.GCP_TF_SA_EMAIL }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
 
-      # 3) Installer Terraform
+      # --------------------------------------------------------------------------
+      # 3) Setup gcloud (optionnel pour Terraform, mais très utile pour debug)
+      # --------------------------------------------------------------------------
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      # --------------------------------------------------------------------------
+      # 4) Vérification rapide : est-ce que je suis bien authentifié ?
+      # --------------------------------------------------------------------------
+      - name: Verify gcloud auth
+        run: |
+          gcloud auth list
+          gcloud config set project "${{ secrets.GCP_PROJECT_ID }}"
+          gcloud config get-value project
+
+      # --------------------------------------------------------------------------
+      # 5) Installer Terraform
+      # --------------------------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 4) Terraform Init (backend GCS)
-      - name: Terraform init
+      # --------------------------------------------------------------------------
+      # 6) Terraform init + plan via ton Makefile (standardisation “entreprise”)
+      #
+      # Note :
+      # - make tf-plan appelle déjà tf-init chez toi
+      # - mais je garde des steps séparés pour des logs plus lisibles
+      # --------------------------------------------------------------------------
+      - name: Terraform init (dev)
         run: make tf-init ENV=${ENV}
 
-      # 5) Terraform plan
-      - name: Terraform plan
+      - name: Terraform plan (dev)
         run: make tf-plan ENV=${ENV}
 
-      # 6) Terraform apply (à activer après validation)
-      # - name: Terraform apply
+      # --------------------------------------------------------------------------
+      # 7) Terraform apply (désactivé volontairement)
+      # - Quand tu veux l'activer : tu décommentes ce bloc
+      # - Ou tu crées un second workflow “terraform-apply-dev”
+      # --------------------------------------------------------------------------
+      # - name: Terraform apply (dev)
       #   run: make tf-apply ENV=${ENV}

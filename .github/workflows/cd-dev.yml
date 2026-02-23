@@ -1,63 +1,132 @@
 name: CD-DEV
 
+# ------------------------------------------------------------------------------
+# Déclencheur :
+# - Push sur main => déploiement DEV + Dataform
+# - Optionnel : workflow_dispatch pour lancer manuellement
+# ------------------------------------------------------------------------------
 on:
   push:
     branches: ["main"]
+  # workflow_dispatch: {}
 
+# ------------------------------------------------------------------------------
+# Permissions MINIMALES pour WIF/OIDC :
+# - contents: read   -> checkout
+# - id-token: write  -> indispensable pour OIDC (WIF)
+# ------------------------------------------------------------------------------
 permissions:
   contents: read
-  id-token: write   # OBLIGATOIRE pour OIDC/WIF
-  actions: read
+  id-token: write
+
+# ------------------------------------------------------------------------------
+# Concurrency :
+# - Empêche 2 runs en parallèle sur DEV (push successifs)
+# - cancel-in-progress = true => annule l'ancien run si un nouveau arrive
+# ------------------------------------------------------------------------------
+concurrency:
+  group: cd-dev
+  cancel-in-progress: true
 
 jobs:
   deploy-dev:
     runs-on: ubuntu-latest
 
     steps:
+      # --------------------------------------------------------------------------
       # 1) Checkout
+      # --------------------------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2) Auth GCP via WIF (ZERO secret JSON)
-      # IMPORTANT :
-      # - workload_identity_provider = output terraform
-      # - service_account = SA créé par terraform (sa-github-cicd-dev@...)
+      # --------------------------------------------------------------------------
+      # 2) Auth Google Cloud via Workload Identity Federation (WIF)
+      # --------------------------------------------------------------------------
       - name: Authenticate to Google Cloud (WIF)
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           token_format: "access_token"
-          workload_identity_provider: "projects/LA_TON_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool-dev/providers/github-provider-dev"
-          service_account: "sa-github-cicd-dev@lakehouse-486419.iam.gserviceaccount.com"
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
 
-      # 3) Setup gcloud
+      # --------------------------------------------------------------------------
+      # 3) Setup gcloud (utile pour debug + certaines commandes)
+      # --------------------------------------------------------------------------
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # 4) Setup Terraform
+      # --------------------------------------------------------------------------
+      # 4) Vérification d’auth (debug)
+      # --------------------------------------------------------------------------
+      - name: Verify gcloud auth
+        run: |
+          gcloud auth list
+          gcloud config set project "${{ secrets.GCP_PROJECT_ID }}"
+          gcloud config get-value project
+
+      # --------------------------------------------------------------------------
+      # 5) Setup Terraform
+      # --------------------------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 5) Terraform apply DEV
+      # --------------------------------------------------------------------------
+      # 6) Terraform init
+      # --------------------------------------------------------------------------
+      - name: Terraform init (dev)
+        working-directory: terraform
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          terraform version
+          terraform init -reconfigure -backend-config=envs/dev/backend.hcl
+
+      # --------------------------------------------------------------------------
+      # 7) Terraform plan (DEV) -> on sort un planfile
+      # - Bonne pratique : apply = EXACTEMENT ce plan
+      # --------------------------------------------------------------------------
+      - name: Terraform plan (dev)
+        working-directory: terraform
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          terraform plan -var-file=envs/dev/terraform.tfvars -out=tfplan
+
+      # --------------------------------------------------------------------------
+      # 8) Terraform apply (DEV) basé sur le planfile
+      # --------------------------------------------------------------------------
       - name: Terraform apply (dev)
         working-directory: terraform
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          terraform init -reconfigure -backend-config=envs/dev/backend.hcl
-          terraform apply -auto-approve -var-file=envs/dev/terraform.tfvars
+          terraform apply -auto-approve tfplan
 
-      # 6) Setup Python
+      # --------------------------------------------------------------------------
+      # 9) Setup Python 3.11 + cache pip (plus rapide + stable)
+      # --------------------------------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
-      # 7) Install minimal deps for runner
+      # --------------------------------------------------------------------------
+      # 10) Install deps Python
+      # - si requirements.txt existe => install
+      # - sinon deps minimales pour ton runner Dataform
+      # --------------------------------------------------------------------------
       - name: Install python deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt || true
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install google-auth requests pyyaml
 
-      # 8) Run Dataform DEV (tags=dev)
+      # --------------------------------------------------------------------------
+      # 11) Run Dataform DEV
+      # - Ton Makefile mappe ENV=dev => wf-dev-on-demand
+      # --------------------------------------------------------------------------
       - name: Dataform run (dev)
         run: |
           make dataform-run ENV=dev
