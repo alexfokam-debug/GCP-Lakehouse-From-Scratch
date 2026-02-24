@@ -1,45 +1,23 @@
 ###############################################################################
-# main.tf – Module Dataform
+# main.tf – Module Dataform (Enterprise-ready)
+#
 # Objectif :
-# 1) Créer le repository Dataform (déjà fait)
-# 2) Créer une Release Config (paramètres de compilation standard)
-# 3) Créer un Workflow Config (schedule prod-like lun-ven 06:00)
+# 1) Créer le repository Dataform
+# 2) Créer une Release Config
+# 3) Créer un Workflow Config PROD (planifié)
+# 4) Créer un Workflow DEV (on-demand)
+#
+# Architecture Sécurité :
+# - Le token Git est stocké dans un projet centralisé (Security Project)
+# - On ne lit PAS le secret
+# - On référence uniquement la VERSION fournie en variable
+# - Terraform ne voit jamais le token
 ###############################################################################
 
-# -----------------------------------------------------------------------------
-# 1) Repository Dataform (déjà OK chez toi)
-# -----------------------------------------------------------------------------
+###############################################################################
+# 1️⃣ Repository Dataform
+###############################################################################
 resource "google_dataform_repository" "this" {
-  provider = google-beta
-
-  project = var.project_id
-  region  = var.region
-
-  name         = var.repo_name
-  display_name = var.repo_display_name
-
-  git_remote_settings {
-    url                                 = var.git_repo_url
-    default_branch                      = var.git_default_branch
-    authentication_token_secret_version = var.git_token_secret_version
-  }
-
-  labels = var.labels
-}
-
-# =============================================================================
-# Dataform Release Config
-# =============================================================================
-# Objectif :
-# - Définir comment Dataform compile le repo (branche, variables, etc.)
-# - Sert de base aux workflows planifiés
-# =============================================================================
-
-resource "google_dataform_repository_release_config" "prod_release" {
-
-  # ---------------------------------------------------------------------------
-  # Dataform resources => souvent via provider google-beta
-  # ---------------------------------------------------------------------------
   provider = google-beta
 
   # ---------------------------------------------------------------------------
@@ -49,43 +27,69 @@ resource "google_dataform_repository_release_config" "prod_release" {
   region  = var.region
 
   # ---------------------------------------------------------------------------
-  # Repository Dataform cible
+  # Nom du repository (ex: lakehouse-staging-dataform)
   # ---------------------------------------------------------------------------
+  name         = var.repo_name
+  display_name = var.repo_display_name
+
+  # ---------------------------------------------------------------------------
+  # Connexion Git distante (GitHub)
+  #
+  # IMPORTANT:
+  # - On passe directement une version complète du secret
+  # - Exemple:
+  #   projects/518653594867/secrets/dataform-git-token/versions/latest
+  # ---------------------------------------------------------------------------
+  git_remote_settings {
+    url                                 = var.git_repo_url
+    default_branch                      = var.git_default_branch
+    authentication_token_secret_version = var.dataform_git_token_secret_version
+  }
+
+  # Labels de gouvernance
+  labels = var.labels
+}
+
+###############################################################################
+# 2️⃣ Dataform Release Config
+#
+# Définit comment le repo est compilé (branche + variables)
+###############################################################################
+resource "google_dataform_repository_release_config" "prod_release" {
+  provider = google-beta
+
+  project = var.project_id
+  region  = var.region
+
   repository = google_dataform_repository.this.name
+  name       = "release-prod"
 
-  # ---------------------------------------------------------------------------
-  # Nom technique du release config
-  # ---------------------------------------------------------------------------
-  name = "release-prod"
-
-  # ---------------------------------------------------------------------------
-  # Git commit-ish : la branche ou tag utilisé pour compiler
-  # (main en prod)
-  # ---------------------------------------------------------------------------
+  # Branche utilisée pour compiler
   git_commitish = var.git_default_branch
 
-  # ---------------------------------------------------------------------------
-  # Variables de compilation (Dataform)
-  # Ici on passe l'env, utile dans dataform.json / includes
-  # ---------------------------------------------------------------------------
+  # Configuration de compilation
   code_compilation_config {
-    default_database = var.project_id
-    default_schema   = "analytics_${var.environment}"
 
-    # Variables custom utilisables dans Dataform (ex: includes/constants.js)
+    # Base par défaut (projet GCP)
+    default_database = var.project_id
+
+    # Dataset cible analytics_{env}
+    default_schema = "analytics_${var.environment}"
+
+    # Variables injectées dans Dataform (ex: includes/constants.js)
     vars = {
       env = var.environment
     }
   }
 }
-# =============================================================================
-# Dataform Workflow Config (schedule)
-# =============================================================================
-# Objectif :
-# - Planifier l'exécution automatique
-# - Lun → Ven en prod (pas le week-end)
-# - Exécuter seulement certains tags (ex: "prod")
-# =============================================================================
+
+###############################################################################
+# 3️⃣ Workflow PROD (planifié)
+#
+# - Exécution automatique
+# - Lun → Ven à 06:00
+# - Exécute uniquement les tags "prod"
+###############################################################################
 resource "google_dataform_repository_workflow_config" "prod_weekdays" {
   provider = google-beta
 
@@ -93,52 +97,41 @@ resource "google_dataform_repository_workflow_config" "prod_weekdays" {
   region     = var.region
   repository = google_dataform_repository.this.name
 
-  # Nom technique
   name = "wf-prod-weekdays"
 
-  # On attache le release config
   release_config = google_dataform_repository_release_config.prod_release.id
 
-  # CRON : tous les jours ouvrés (lun=1 ... ven=5)
-  # Exemple : 06:00 Europe/Paris
+  # CRON : 06:00 du lundi au vendredi
   cron_schedule = "0 6 * * 1-5"
 
-  # Timezone (si supportée par le provider / API)
-  # Si ton provider ne supporte pas ce champ, on le retire.
+  # Timezone Europe/Paris
   time_zone = "Europe/Paris"
 
-  # Exécuter uniquement des tags (mode entreprise)
   invocation_config {
-    included_tags   = ["prod"]
+    included_tags = ["prod"]
+
+    # ⚠️ DOIT être un email complet
+    # Exemple:
+    # sa-dataform-staging@lakehouse-stg-486419.iam.gserviceaccount.com
     service_account = var.dataform_sa_email
   }
 }
 
-##############################################
-# Dataform Repository (Enterprise)
+###############################################################################
+# 4️⃣ Workflow DEV (On-demand)
 #
-# Objectif:
-# - Créer un repo Dataform dans GCP
-# - Optionnel: connecter ce repo à un repo Git (GitHub/GitLab)
-# - Le token Git est stocké dans Secret Manager:
-#   ✅ TF référence la version "latest"
-#   ❌ TF ne stocke jamais le token dans le state
-##############################################
-
-# On référence la version "latest" du secret, sans lire le contenu.
-# => Cette data source ne sort pas le token, elle renvoie un "resource name".
-data "google_secret_manager_secret_version" "git_token_latest" {
-  project = var.project_id
-  secret  = var.git_token_secret_id
-  version = "latest"
-}
+# - Pas de cron
+# - Utilisé pour déclenchement manuel
+# - Exécute uniquement les tags "dev"
+###############################################################################
 resource "google_dataform_repository_workflow_config" "dev_on_demand" {
   provider = google-beta
 
   project    = var.project_id
   region     = var.region
   repository = google_dataform_repository.this.name
-  name       = "wf-dev-on-demand"
+
+  name = "wf-dev-on-demand"
 
   release_config = google_dataform_repository_release_config.prod_release.id
 
@@ -147,5 +140,3 @@ resource "google_dataform_repository_workflow_config" "dev_on_demand" {
     service_account = var.dataform_sa_email
   }
 }
-
-

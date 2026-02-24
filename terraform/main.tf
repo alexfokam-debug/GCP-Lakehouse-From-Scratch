@@ -274,9 +274,9 @@ resource "google_bigquery_table" "raw_external_tables" {
 # - Dataset de sortie Dataform (tables vues/marts)
 # =============================================================================
 resource "google_bigquery_dataset" "analytics" {
-  project   = var.project_id
+  project    = var.project_id
   dataset_id = "analytics_${var.environment}"
-  location  = var.region
+  location   = var.region
 
   labels = merge(
     var.labels,
@@ -384,9 +384,9 @@ resource "google_bigquery_table" "curated_external_tables" {
 # - Séparer les tables iceberg dans un dataset dédié
 # =============================================================================
 resource "google_bigquery_dataset" "curated_iceberg" {
-  project   = var.project_id
+  project    = var.project_id
   dataset_id = var.curated_iceberg_dataset_id
-  location  = var.region
+  location   = var.region
 
   labels = merge(
     var.labels,
@@ -480,7 +480,7 @@ module "gcs_dataproc_temp" {
   dataset_name = var.dataset_name
 
   # ✅ correction naming
-  bucket_name = "${var.project_id}-dataproc-temp-${var.environment}"
+  bucket_name = "lakehouse-${var.project_id_short}-dataproc-temp-${var.environment}"
 }
 
 # =============================================================================
@@ -501,8 +501,8 @@ module "iam" {
   source = "./modules/iam"
 
   # Contexte
-  project_id   = var.project_id
-  environment  = var.environment
+  project_id  = var.project_id
+  environment = var.environment
 
   # Dataform runtime SA (email) – fourni par tfvars pour l’instant
   dataform_sa_email = var.dataform_sa_email
@@ -603,6 +603,8 @@ module "dataform" {
 
   # Runtime SA (Dataform invoquera les actions avec ce SA)
   dataform_sa_email = var.dataform_sa_email
+
+  dataform_git_token_secret_version = var.dataform_git_token_secret_version
 }
 
 # =============================================================================
@@ -624,4 +626,18 @@ resource "google_storage_bucket_object" "bootstrap_sales_transactions_parquet" {
   name   = "domain=${var.domain}/dataset=sales_transactions/sales_transactions_0001.parquet"
   bucket = module.gcs_raw.bucket_name
   source = "${path.module}/../data/sample.parquet"
+}
+
+module "project_labels" {
+  source     = "./modules/project_labels"
+  project_id = var.project_id
+
+  labels = {
+    environment = var.environment
+    system      = "gcp-lakehouse"
+    managed_by  = "terraform"
+    repository  = "gcp-lakehouse-from-scratch"
+    owner       = "alexfokam"
+    cost_center = "lab"
+  }
 }

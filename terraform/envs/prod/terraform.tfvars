@@ -92,3 +92,4 @@ enable_samples = true
 # Utilisé dans les noms de buckets:
 # lakehouse-<project_id_short>-raw-staging
 project_id_short = "486419"
+create_dataform_git_token_secret = false

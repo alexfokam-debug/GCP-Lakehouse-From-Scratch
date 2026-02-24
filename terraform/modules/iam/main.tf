@@ -172,10 +172,13 @@ resource "google_project_iam_member" "dataproc_bq_job_user" {
 }
 
 # -- Autorise BigQuery Storage API (Read sessions)
-resource "google_project_iam_member" "dataproc_bq_read_session_user" {
+resource "google_project_iam_binding" "dataproc_bq_read_session_user" {
   project = var.project_id
   role    = "roles/bigquery.readSessionUser"
-  member  = "serviceAccount:${google_service_account.dataproc_runtime.email}"
+
+  members = [
+    "serviceAccount:${google_service_account.dataproc_runtime.email}",
+  ]
 }
 
 # -- Lecture RAW external dataset (si Spark lit depuis raw_ext_*)

@@ -210,6 +210,28 @@ variable "bootstrap_ci_iam" {
   type    = bool
   default = false
 }
+
 variable "git_token_secret_id" {
-  type = string
+  description = "Secret Manager secret id for the Dataform Git token."
+  type        = string
+  default     = "dataform-git-token"
+}
+
+variable "dataform_git_token" {
+  description = "Git token value stored as a Secret Manager version (use TF_VAR_dataform_git_token)."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+# ---------------------------------------------------------------------------
+# Secret Manager — Dataform Git token
+# ---------------------------------------------------------------------------
+variable "create_dataform_git_token_secret" {
+  description = <<EOT
+Si true, Terraform crée le secret 'dataform-git-token' dans le projet courant.
+Si false, on suppose qu'on utilise un secret existant (souvent centralisé),
+et on ne crée rien dans le projet d'environnement.
+EOT
+  type    = bool
+  default = false
 }

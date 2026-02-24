@@ -38,9 +38,9 @@ dataset_name = "sample"
 # Labels GCP (gouvernance / FinOps)
 # ---------------------------------------------------------------------------
 labels = {
-  owner       = "alex"       # owner / responsable
-  platform    = "lakehouse"  # nom plateforme
-  cost_center = "data"       # centre de coûts
+  owner       = "alex"      # owner / responsable
+  platform    = "lakehouse" # nom plateforme
+  cost_center = "data"      # centre de coûts
 }
 
 
@@ -55,7 +55,7 @@ labels = {
 raw_external_tables = {
   # Exemple minimal
   sample_ext = {
-    source_format = "PARQUET"   # format des fichiers sources
+    source_format = "PARQUET" # format des fichiers sources
     source_uris = [
       "gs://lakehouse-486419-raw-dev/domain=sales/dataset=sample/*"
     ]
@@ -236,3 +236,5 @@ tf_state_bucket_name = "lakehouse-terraform-states-486419"
 # -> Une fois DEV stable, on pourra activer proprement ou garder false + gérer à part
 # ---------------------------------------------------------------------------
 bootstrap_ci_iam = false
+
+create_dataform_git_token_secret = true
