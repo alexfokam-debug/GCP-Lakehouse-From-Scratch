@@ -1,0 +1,56 @@
+name: Terraform (staging)
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-staging.yml"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: "access_token"
+          workload_identity_provider: "projects/829178721941/locations/global/workloadIdentityPools/github-pool-staging/providers/github-provider-staging"
+          service_account: "sa-github-cicd-staging@lakehouse-stg-486419.iam.gserviceaccount.com"
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Terraform Init (staging backend)
+        run: terraform init -backend-config=envs/staging/backend.hcl -reconfigure
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan (staging)
+        run: terraform plan -var-file=envs/staging/terraform.tfvars
+
+      # ✅ Option 1: apply automatique sur main (si tu veux)
+      # - name: Terraform Apply (staging)
+      #   run: terraform apply -auto-approve -var-file=envs/staging/terraform.tfvars
