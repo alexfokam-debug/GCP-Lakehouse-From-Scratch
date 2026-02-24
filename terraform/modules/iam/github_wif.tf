@@ -2,144 +2,137 @@
 # github_wif.tf — Workload Identity Federation (GitHub -> GCP)
 # ============================================================
 # OBJECTIF :
-# - Permettre à GitHub Actions de s'authentifier sur GCP SANS clé JSON
+# - Authentifier GitHub Actions sur GCP SANS clé JSON (OIDC/WIF)
 #
-# CONCEPT :
-# - GitHub émet un jeton OIDC (OpenID Connect)
-# - GCP vérifie ce jeton via un "Workload Identity Provider"
-# - Si tout est OK, GCP donne un access token temporaire
-# - GitHub peut alors "impersonate" (agir en tant que) un Service Account
+# PRINCIPE :
+# - GitHub émet un token OIDC (issuer: token.actions.githubusercontent.com)
+# - GCP valide via un Workload Identity Pool + Provider
+# - Si la condition passe, GitHub peut "impersonate" un Service Account
 #
-# SECURITE :
-# - On filtre strictement le repo autorisé via var.github_repository
-# - On évite tout secret long terme dans GitHub
+# SECURITE (DEV "secure") :
+# - On filtre STRICTEMENT :
+#     1) repository == owner/repo
+#     2) ref == refs/heads/main
+# - On NE filtre PAS encore sur workflow tant qu’on n’a pas validé
+#   la valeur exacte du claim (sinon tu risques un blocage inutile).
 # ============================================================
 
 # ------------------------------------------------------------
-# 1) Workload Identity Pool
+# 1) Workload Identity Pool (conteneur d'identités externes)
 # ------------------------------------------------------------
-# Un "pool" = conteneur logique des identités externes
-# Ici : identités issues de GitHub Actions
 resource "google_iam_workload_identity_pool" "github" {
   provider = google-beta
 
-  # Projet GCP où créer le pool
+  # Projet où vit le pool WIF
   project = var.project_id
 
-  # ID unique du pool (dans le projet)
-  # On inclut l'environnement pour éviter collisions dev/stg/prd
+  # ID du pool (unique dans le projet)
   workload_identity_pool_id = "github-pool-${var.environment}"
 
-  # Libellés (lisibles dans la console)
+  # Nom lisible dans la console
   display_name = "GitHub Pool (${var.environment})"
 
-  # Description (gouvernance)
+  # Description
   description = "OIDC pool for GitHub Actions (${var.environment})"
 }
 
 # ------------------------------------------------------------
-# 2) Workload Identity Provider (OIDC GitHub)
+# 2) Provider OIDC GitHub (déclare la confiance GitHub -> GCP)
 # ------------------------------------------------------------
-# Le provider dit à GCP :
-# - "Je fais confiance à l'issuer OIDC GitHub"
-# - "Voici comment mapper les claims GitHub"
-# - "Voici la condition de sécurité : seul ce repo est autorisé"
 resource "google_iam_workload_identity_pool_provider" "github" {
   provider = google-beta
 
+  # Projet + pool
   project                   = var.project_id
   workload_identity_pool_id = google_iam_workload_identity_pool.github.workload_identity_pool_id
 
-  # ID unique du provider (dans le pool)
+  # ID du provider (unique dans le pool)
   workload_identity_pool_provider_id = "github-provider-${var.environment}"
 
+  # Nom lisible
   display_name = "GitHub Provider (${var.environment})"
   description  = "OIDC provider for GitHub Actions"
 
-  # ----------------------------------------------------------
-  # OIDC issuer : GitHub Actions
-  # ----------------------------------------------------------
+  # -------------------------
+  # Issuer OIDC GitHub
+  # -------------------------
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }
 
-  # ----------------------------------------------------------
-  # Mapping des claims OIDC -> attributs GCP
-  # ----------------------------------------------------------
-  # google.subject : identifiant unique de l'identité externe
-  # attribute.repository : ex "owner/repo"
-  # attribute.ref : ex "refs/heads/main" (utile pour filtrer main)
-  # attribute.actor : utilisateur GitHub déclencheur
+  # -------------------------
+  # Mapping claims GitHub -> attributs GCP
+  # -------------------------
+  # IMPORTANT :
+  # - "attribute.repository" est la base pour filtrer owner/repo
+  # - "attribute.ref" permet de filtrer sur la branche main
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
     "attribute.repository" = "assertion.repository"
     "attribute.ref"        = "assertion.ref"
     "attribute.actor"      = "assertion.actor"
+    "attribute.workflow"   = "assertion.workflow"
   }
-  # CONDITION “prod-grade”
-  # On n'autorise l'émission de credential QUE si :
-  # - le workflow vient du repo exact (owner/repo)
-  # - ET la ref est la branche main (évite les branches non maîtrisées)
+
+  # -------------------------
+  # CONDITION "prod-grade" (fiable)
+  # -------------------------
+  # On autorise uniquement :
+  # - le repo exact
+  # - la branche main
   #
-  # Important:
-  # - assertion.repository = "owner/repo"
-  # - assertion.ref        = "refs/heads/main" (pour un push main)
-  attribute_condition = join(" && ", [
-    "attribute.repository == \"${var.github_repository}\"",
-  "attribute.ref == \"refs/heads/main\""])
+  # Simple, robuste, évite 95% des erreurs.
+  # (On ajoutera la contrainte workflow après vérif du claim)
+  attribute_condition = "attribute.repository == \"${var.github_repository}\" && attribute.ref == \"refs/heads/main\""
 }
 
 # ------------------------------------------------------------
-# 3) Service Account dédié CI/CD
+# 3) Service Account dédié GitHub CI/CD
 # ------------------------------------------------------------
-# Ce SA sera "utilisé" par GitHub Actions via impersonation.
-# Ici on le crée dans le module IAM (propre et reproductible).
 resource "google_service_account" "github_cicd" {
   project = var.project_id
 
-  # account_id = nom technique (sans @)
+  # Nom technique (sans @)
   account_id = "sa-github-cicd-${var.environment}"
 
+  # Nom lisible
   display_name = "GitHub CI/CD SA (${var.environment})"
 }
 
 # ------------------------------------------------------------
-# 4) Autoriser GitHub (WIF) à impersonate ce SA
+# 4) Autoriser GitHub (WIF) à impersonate le SA
 # ------------------------------------------------------------
-# C’est LE lien entre :
-# - l’identité externe (GitHub OIDC)
-# - et le Service Account GCP
-#
-# rôle : roles/iam.workloadIdentityUser
-# member : principalSet:// ... (tout ce qui match repository)
 resource "google_service_account_iam_member" "github_cicd_wif" {
+  # SA cible
   service_account_id = google_service_account.github_cicd.name
-  role               = "roles/iam.workloadIdentityUser"
 
-  # ----------------------------------------------------------
-  # principalSet = ensemble d'identités dans le pool
-  # On filtre sur attribute.repository = var.github_repository
-  # ----------------------------------------------------------
+  # Rôle OBLIGATOIRE pour WIF
+  role = "roles/iam.workloadIdentityUser"
+
+  # Groupe d'identités autorisées (principalSet) filtré sur repo
+  # => Seuls les tokens dont attribute.repository == owner/repo passent
   member = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repository}"
 }
 
 # ------------------------------------------------------------
-# 5) Permissions projet (MVP)
+# 5) Permissions projet (DEV sécurisé)
 # ------------------------------------------------------------
-# Pour aller vite en sandbox : roles/editor
-# En entreprise : tu réduiras ensuite (BigQuery, Storage, Dataform, IAM…)
+#  Pour DEV, tu peux garder roles/editor pour aller vite.
+#  Mais en "secure dev", je conseille de le mettre derrière un flag.
+#    (sinon tu donnes trop de pouvoir au pipeline)
 resource "google_project_iam_member" "github_cicd_editor" {
+  count   = var.bootstrap_ci_iam ? 1 : 0
   project = var.project_id
   role    = "roles/editor"
   member  = "serviceAccount:${google_service_account.github_cicd.email}"
 }
 
 # ------------------------------------------------------------
-# 6) Optionnel : droits IAM plus élevés pour Terraform
+# 6) Permissions IAM élevées (OPTIONNEL / à éviter en prod)
 # ------------------------------------------------------------
-# Certains modules IAM peuvent nécessiter des droits IAM.
-# Si tu veux minimiser : tu pourras remplacer par roles/iam.admin ciblé.
+# Pareil : uniquement si bootstrap_ci_iam = true, sinon OFF.
 resource "google_project_iam_member" "github_cicd_security_admin" {
+  count   = var.bootstrap_ci_iam ? 1 : 0
   project = var.project_id
   role    = "roles/iam.securityAdmin"
   member  = "serviceAccount:${google_service_account.github_cicd.email}"

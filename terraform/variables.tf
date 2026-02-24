@@ -210,3 +210,6 @@ variable "bootstrap_ci_iam" {
   type    = bool
   default = false
 }
+variable "git_token_secret_id" {
+  type = string
+}
