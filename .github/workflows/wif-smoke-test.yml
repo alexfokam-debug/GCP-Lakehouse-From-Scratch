@@ -19,11 +19,19 @@ jobs:
         with:
           workload_identity_provider: "${{ secrets.GCP_WIF_PROVIDER }}"
           service_account: "${{ secrets.GCP_SA_EMAIL }}"
+          token_format: "access_token"
+          access_token_lifetime: "3600s"
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Test access to project
+      - name: Set project
+        run: gcloud config set project lakehouse-486419
+
+      - name: Debug identity
         run: |
           gcloud auth list
-          gcloud projects describe lakehouse-486419
+          gcloud config list
+
+      - name: Test access
+        run: gcloud projects describe lakehouse-486419
