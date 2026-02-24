@@ -1,37 +1,34 @@
-name: wif-smoke-test
+name: auth
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # OBLIGATOIRE pour WIF
 
 jobs:
   auth:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Auth to Google Cloud (WIF)
+      - id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: "${{ secrets.GCP_WIF_PROVIDER }}"
-          service_account: "${{ secrets.GCP_SA_EMAIL }}"
-          token_format: "access_token"
-          access_token_lifetime: "3600s"
+          project_id: ${{ secrets.GCP_PROJECT_ID }}   # ou en dur
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+          create_credentials_file: true
+          export_environment_variables: true
 
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Set project
-        run: gcloud config set project lakehouse-486419
-
-      - name: Debug identity
+      - name: Who am I
         run: |
           gcloud auth list
-          gcloud config list
-
-      - name: Test access
-        run: gcloud projects describe lakehouse-486419
+          gcloud config list project
