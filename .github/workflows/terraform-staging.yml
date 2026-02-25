@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   terraform-plan-staging:
-    environment: staging
     runs-on: ubuntu-latest
 
     defaults:
@@ -23,9 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # =========================
-      # 0) PRECHECK - resolve config from vars (preferred) or secrets (fallback)
-      # =========================
+      # 0) Resolve config (vars preferred, secrets fallback)
       - name: Precheck - resolve config (vars -> secrets fallback)
         id: cfg
         shell: bash
@@ -57,9 +54,7 @@ jobs:
             echo "wif_sa=${WIF_SA}"
           } >> "$GITHUB_OUTPUT"
 
-      # =========================
-      # 1) Auth via Workload Identity Federation (WIF)
-      # =========================
+      # 1) Auth WIF
       - name: Authenticate to Google Cloud (WIF)
         id: auth
         uses: google-github-actions/auth@v2
@@ -70,26 +65,18 @@ jobs:
           export_environment_variables: true
           token_format: "access_token"
 
-      # =========================
-      # 2) Setup gcloud (debug + tokeninfo)
-      # =========================
+      # 2) Setup gcloud
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ steps.cfg.outputs.project_id }}
 
-      # =========================
-      # 3) Debug identity (safe) + quick permissions check
-      # =========================
+      # 3) Identity & permission check (safe)
       - name: Debug - identity & permissions (safe)
         shell: bash
         run: |
           set -euo pipefail
-
           echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-NOT_SET}"
-
-          # set project without spamming too much
-          gcloud config set project "${{ steps.cfg.outputs.project_id }}" --quiet >/dev/null 2>&1 || true
 
           echo "== gcloud auth list =="
           gcloud auth list
@@ -102,11 +89,7 @@ jobs:
           gcloud projects describe "${{ steps.cfg.outputs.project_id }}" --format="value(projectId)" >/dev/null
           echo "OK: can read project"
 
-          # NOTE: "Project lacks an environment tag" warning is harmless.
-
-      # =========================
-      # 4) Terraform
-      # =========================
+      # 4) Terraform tooling
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -121,21 +104,19 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
-      # =========================
-      # 5) Terraform plan (save output)
-      # =========================
+      # 5) Plan saved as plan.out
       - name: Terraform plan (staging) -> plan.out
         env:
           GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
           GOOGLE_PROJECT: ${{ steps.cfg.outputs.project_id }}
+        shell: bash
         run: |
           set -euo pipefail
           terraform plan -var-file=envs/staging/terraform.tfvars -out=plan.out
+          echo "Saved the plan to: plan.out"
           terraform show -no-color plan.out | sed -n '1,120p'
 
-      # =========================
-      # 6) Job summary (nice in GitHub UI)
-      # =========================
+      # 6) Job summary
       - name: Summary
         if: always()
         shell: bash
@@ -148,5 +129,5 @@ jobs:
             echo "- Ref: \`${GITHUB_REF}\`"
             echo "- Actor: \`${GITHUB_ACTOR}\`"
             echo ""
-            echo "> Note: the gcloud 'environment tag' warning is non-blocking."
+            echo "> If you still see 'has moved to ...[0]' in the plan, add moved blocks in terraform/modules/iam/moved.tf."
           } >> "$GITHUB_STEP_SUMMARY"
