@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   terraform-plan-staging:
-    name: terraform-plan-staging
     runs-on: ubuntu-latest
     environment: staging
 
@@ -22,38 +21,56 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ------------------------------------------------------------
-      # 0) Guardrail: secrets not available on fork PRs
-      # ------------------------------------------------------------
-      - name: Guardrail - detect fork PR (secrets won't be available)
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
-        run: |
-          echo "❌ This is a PR from a fork. GitHub does NOT expose secrets to forked PR workflows."
-          echo "➡️ Run via workflow_dispatch or push on main (same repo) to test WIF/Terraform."
-          exit 1
-
-      # ------------------------------------------------------------
-      # 1) Preflight: ensure required secrets exist (WITHOUT printing them)
-      # ------------------------------------------------------------
-      - name: Preflight - check required secrets are present
-        env:
-          WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
-          WIF_SA: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}
-          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID_STAGING }}
+      # 0) DEBUG CONTEXT: montre pourquoi les secrets peuvent être bloqués
+      - name: Debug - context
         run: |
           set -euo pipefail
-          [ -n "${WIF_PROVIDER}" ] || (echo "❌ Missing secret: GCP_WIF_PROVIDER_STAGING" && exit 1)
-          [ -n "${WIF_SA}" ] || (echo "❌ Missing secret: GCP_WIF_SERVICE_ACCOUNT_STAGING" && exit 1)
-          [ -n "${PROJECT_ID}" ] || (echo "❌ Missing secret: GCP_PROJECT_ID_STAGING" && exit 1)
-          echo "✅ Secrets are present (values not displayed)."
+          echo "event_name=${{ github.event_name }}"
+          echo "ref=${{ github.ref }}"
+          echo "actor=${{ github.actor }}"
+          echo "repo=${{ github.repository }}"
+          echo "fork_pr=${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}"
+          echo "environment=staging"
+          echo "NOTE: secrets are NOT available for fork PRs."
+          echo "NOTE: environment protection rules can block secrets."
 
-      # ------------------------------------------------------------
-      # 2) Authenticate using Workload Identity Federation (WIF)
-      #    IMPORTANT: specify ONLY workload_identity_provider (not credentials_json)
-      # ------------------------------------------------------------
+      # 1) Stop si PR depuis fork
+      - name: Guardrail - fork PR has no secrets
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
+        run: |
+          echo "❌ PR from a fork: secrets will not be injected."
+          exit 1
+
+      # 2) CHECK SECRETS: test sec, sans afficher valeurs
+      - name: Preflight - check secrets injection (safe)
+        run: |
+          set -euo pipefail
+
+          # Important: on teste via les expressions GitHub, pas via env
+          # pour détecter "secret empty" vs "secret not injected"
+          if [ -z "${{ secrets.GCP_WIF_PROVIDER_STAGING }}" ]; then
+            echo "❌ Secret empty or not injected: GCP_WIF_PROVIDER_STAGING"
+            echo "➡️ Causes: (1) secret not created, (2) created in variables not secrets,"
+            echo "          (3) created in another environment, (4) env protection rules not approved,"
+            echo "          (5) fork PR, (6) wrong repo/org."
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}" ]; then
+            echo "❌ Secret empty or not injected: GCP_WIF_SERVICE_ACCOUNT_STAGING"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.GCP_PROJECT_ID_STAGING }}" ]; then
+            echo "❌ Secret empty or not injected: GCP_PROJECT_ID_STAGING"
+            exit 1
+          fi
+
+          echo "✅ Secrets injected."
+
+      # 3) AUTH WIF (exactly one of WIF or credentials_json)
       - name: Authenticate to Google Cloud (WIF)
         id: auth
         uses: google-github-actions/auth@v2
@@ -64,72 +81,35 @@ jobs:
           export_environment_variables: true
           token_format: "access_token"
 
-      # ------------------------------------------------------------
-      # 3) Setup gcloud + set project
-      # ------------------------------------------------------------
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID_STAGING }}
 
-      # ------------------------------------------------------------
-      # 4) Debug identity & token (safe)
-      # ------------------------------------------------------------
-      - name: Debug - identity / project / tokeninfo
-        env:
-          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID_STAGING }}
+      - name: Debug - tokeninfo (safe)
         run: |
           set -euo pipefail
-
-          echo "== ADC file path =="
-          echo "${GOOGLE_APPLICATION_CREDENTIALS:-NO_ADC}"
-
-          echo "== gcloud auth list =="
-          gcloud auth list
-
-          echo "== gcloud config (project/account) =="
-          gcloud config get-value project || true
-          gcloud config get-value account || true
-
-          echo "== project describe (should work) =="
-          gcloud projects describe "$PROJECT_ID" --format="value(projectId)" || true
-
-          echo "== tokeninfo (safe fields) =="
+          echo "ADC=${GOOGLE_APPLICATION_CREDENTIALS:-NO_ADC}"
+          gcloud auth list || true
           ACCESS_TOKEN="$(gcloud auth print-access-token)"
-          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" \
-            | jq -r '.email,.aud,.azp,.expires_in' || true
+          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" | jq -r '.email,.aud,.azp,.expires_in' || true
 
-      # ------------------------------------------------------------
-      # 5) Setup Terraform
-      # ------------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
 
-      # ------------------------------------------------------------
-      # 6) Terraform checks
-      # ------------------------------------------------------------
       - name: Terraform fmt
         run: terraform fmt -check -recursive
 
       - name: Terraform init (staging backend)
-        env:
-          # Force Terraform provider to use ADC file generated by auth@v2
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
-          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID_STAGING }}
         run: terraform init -backend-config=envs/staging/backend.hcl -reconfigure
 
       - name: Terraform validate
         run: terraform validate
 
-      # ------------------------------------------------------------
-      # 7) Terraform plan (staging)
-      #    We provide BOTH ADC + explicit access token to avoid ambiguity.
-      # ------------------------------------------------------------
       - name: Terraform plan (staging)
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
           GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
           GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID_STAGING }}
         run: terraform plan -var-file=envs/staging/terraform.tfvars -no-color
