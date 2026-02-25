@@ -3,6 +3,7 @@ name: Terraform (staging) - plan
 on:
   push:
     branches: ["main"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -12,83 +13,77 @@ permissions:
 jobs:
   terraform-plan-staging:
     runs-on: ubuntu-latest
-    environment: staging
-
 
     defaults:
       run:
         working-directory: terraform
-        shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Debug - secrets presence (safe)
+      # =========================
+      # 0) PRECHECK (vars must exist)
+      # =========================
+      - name: Precheck - required repo variables (safe)
         run: |
           set -euo pipefail
-          [ -n "${{ secrets.GCP_WIF_PROVIDER_STAGING }}" ] && echo "provider: OK" || echo "provider: EMPTY"
-          [ -n "${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}" ] && echo "sa: OK" || echo "sa: EMPTY"
-          [ -n "${{ secrets.GCP_PROJECT_ID_STAGING }}" ] && echo "project: OK" || echo "project: EMPTY"
+          echo "event_name=${GITHUB_EVENT_NAME}"
+          echo "ref=${GITHUB_REF}"
+          echo "actor=${GITHUB_ACTOR}"
+          echo "repo=${GITHUB_REPOSITORY}"
 
-      # 0) Debug context
-      - name: Debug - context
-        run: |
-          set -euo pipefail
-          echo "event_name=${{ github.event_name }}"
-          echo "ref=${{ github.ref }}"
-          echo "actor=${{ github.actor }}"
-          echo "repo=${{ github.repository }}"
+          [ -n "${{ vars.GCP_PROJECT_ID_STAGING }}" ] && echo "project: OK" || (echo "❌ Missing repo var: GCP_PROJECT_ID_STAGING" && exit 1)
+          [ -n "${{ vars.GCP_WIF_PROVIDER_STAGING }}" ] && echo "provider: OK" || (echo "❌ Missing repo var: GCP_WIF_PROVIDER_STAGING" && exit 1)
+          [ -n "${{ vars.GCP_WIF_SERVICE_ACCOUNT_STAGING }}" ] && echo "sa: OK" || (echo "❌ Missing repo var: GCP_WIF_SERVICE_ACCOUNT_STAGING" && exit 1)
 
-      # 1) Preflight - verify secrets injection (SAFE)
-      - name: Preflight - check secrets injection (safe)
-        run: |
-          set -euo pipefail
-
-          if [ -z "${{ secrets.GCP_WIF_PROVIDER_STAGING }}" ]; then
-            echo "❌ Missing/empty secret: GCP_WIF_PROVIDER_STAGING"
-            echo "➡️ Put it in: Settings > Secrets and variables > Actions > Secrets (Repository secrets)"
-            exit 1
-          fi
-
-          if [ -z "${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}" ]; then
-            echo "❌ Missing/empty secret: GCP_WIF_SERVICE_ACCOUNT_STAGING"
-            exit 1
-          fi
-
-          if [ -z "${{ secrets.GCP_PROJECT_ID_STAGING }}" ]; then
-            echo "❌ Missing/empty secret: GCP_PROJECT_ID_STAGING"
-            exit 1
-          fi
-
-          echo "✅ Secrets injected."
-
-      # 2) Auth via WIF
+      # =========================
+      # 1) Auth via Workload Identity Federation
+      # =========================
       - name: Authenticate to Google Cloud (WIF)
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
-          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER_STAGING }}
+          service_account: ${{ vars.GCP_WIF_SERVICE_ACCOUNT_STAGING }}
           create_credentials_file: true
           export_environment_variables: true
-          token_format: access_token
+          token_format: "access_token"
 
-      # 3) Setup gcloud (debug)
+      # =========================
+      # 2) Setup gcloud (for debug)
+      # =========================
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ secrets.GCP_PROJECT_ID_STAGING }}
+          project_id: ${{ vars.GCP_PROJECT_ID_STAGING }}
 
-      - name: Debug - identity (safe)
+      # =========================
+      # 3) Debug identity + token
+      # =========================
+      - name: Debug - identity & tokeninfo
         run: |
           set -euo pipefail
-          echo "ADC=${GOOGLE_APPLICATION_CREDENTIALS:-NO_ADC}"
-          gcloud auth list || true
-          gcloud config get-value project || true
-          ACCESS_TOKEN="$(gcloud auth print-access-token)"
-          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" | jq -r '.email,.aud,.azp,.expires_in' || true
+          echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-NOT_SET}"
+          gcloud config set project "${{ vars.GCP_PROJECT_ID_STAGING }}" --quiet
 
+          echo "== gcloud auth list =="
+          gcloud auth list
+
+          echo "== gcloud config =="
+          gcloud config list
+
+          echo "== whoami (tokeninfo) =="
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" | jq -r '.email,.aud,.azp'
+
+          echo "== quick permission check (project get) =="
+          gcloud projects describe "${{ vars.GCP_PROJECT_ID_STAGING }}" --format="value(projectId)" >/dev/null
+          echo "OK: can read project"
+
+      # =========================
       # 4) Terraform
+      # =========================
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -103,8 +98,11 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
+      # IMPORTANT:
+      # - Terraform Google provider will use ADC file (GOOGLE_APPLICATION_CREDENTIALS)
+      # - We also provide access token explicitly to avoid ambiguity (optional, but safe)
       - name: Terraform plan (staging)
         env:
           GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
-          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID_STAGING }}
-        run: terraform plan -var-file=envs/staging/terraform.tfvars -no-color
+          GOOGLE_PROJECT: ${{ vars.GCP_PROJECT_ID_STAGING }}
+        run: terraform plan -var-file=envs/staging/terraform.tfvars
