@@ -11,76 +11,124 @@ permissions:
   id-token: write
 
 jobs:
-  # ✅ Job PR : pas de secrets, pas d'auth, juste qualité Terraform
-  terraform-ci:
-    if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: terraform
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.7.5
-
-      - name: Terraform fmt
-        run: terraform fmt -check -recursive
-
-      - name: Terraform init (local, no backend)
-        run: terraform init -backend=false
-
-      - name: Terraform validate
-        run: terraform validate
-
-
-  # ✅ Job main : auth WIF + backend GCS + plan staging
   terraform-plan-staging:
-    if: ${{ github.event_name != 'pull_request' }}
+    name: terraform-plan-staging
     runs-on: ubuntu-latest
-    environment: staging   # IMPORTANT si tes secrets sont dans Environment "staging"
 
     defaults:
       run:
         working-directory: terraform
+        shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Fail fast if secrets missing
+      # ------------------------------------------------------------
+      # 0) Guardrail: secrets not available on fork PRs
+      # ------------------------------------------------------------
+      - name: Guardrail - detect fork PR (secrets won't be available)
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
         run: |
-          [ -n "${{ secrets.GCP_WIF_PROVIDER_STAGING }}" ] || (echo "❌ Missing secret: GCP_WIF_PROVIDER_STAGING" && exit 1)
-          [ -n "${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}" ] || (echo "❌ Missing secret: GCP_WIF_SERVICE_ACCOUNT_STAGING" && exit 1)
-          [ -n "${{ secrets.GCP_PROJECT_ID_STAGING }}" ] || (echo "❌ Missing secret: GCP_PROJECT_ID_STAGING" && exit 1)
+          echo "❌ This is a PR from a fork. GitHub does NOT expose secrets to forked PR workflows."
+          echo "➡️ Run via workflow_dispatch or push on main (same repo) to test WIF/Terraform."
+          exit 1
 
+      # ------------------------------------------------------------
+      # 1) Preflight: ensure required secrets exist (WITHOUT printing them)
+      # ------------------------------------------------------------
+      - name: Preflight - check required secrets are present
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
+          WIF_SA: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID_STAGING }}
+        run: |
+          set -euo pipefail
+          [ -n "${WIF_PROVIDER}" ] || (echo "❌ Missing secret: GCP_WIF_PROVIDER_STAGING" && exit 1)
+          [ -n "${WIF_SA}" ] || (echo "❌ Missing secret: GCP_WIF_SERVICE_ACCOUNT_STAGING" && exit 1)
+          [ -n "${PROJECT_ID}" ] || (echo "❌ Missing secret: GCP_PROJECT_ID_STAGING" && exit 1)
+          echo "✅ Secrets are present (values not displayed)."
+
+      # ------------------------------------------------------------
+      # 2) Authenticate using Workload Identity Federation (WIF)
+      #    IMPORTANT: specify ONLY workload_identity_provider (not credentials_json)
+      # ------------------------------------------------------------
       - name: Authenticate to Google Cloud (WIF)
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
           service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}
           create_credentials_file: true
           export_environment_variables: true
+          token_format: "access_token"
 
+      # ------------------------------------------------------------
+      # 3) Setup gcloud + set project
+      # ------------------------------------------------------------
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID_STAGING }}
 
-      - uses: hashicorp/setup-terraform@v3
+      # ------------------------------------------------------------
+      # 4) Debug identity & token (safe)
+      # ------------------------------------------------------------
+      - name: Debug - identity / project / tokeninfo
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID_STAGING }}
+        run: |
+          set -euo pipefail
+
+          echo "== ADC file path =="
+          echo "${GOOGLE_APPLICATION_CREDENTIALS:-NO_ADC}"
+
+          echo "== gcloud auth list =="
+          gcloud auth list
+
+          echo "== gcloud config (project/account) =="
+          gcloud config get-value project || true
+          gcloud config get-value account || true
+
+          echo "== project describe (should work) =="
+          gcloud projects describe "$PROJECT_ID" --format="value(projectId)" || true
+
+          echo "== tokeninfo (safe fields) =="
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" \
+            | jq -r '.email,.aud,.azp,.expires_in' || true
+
+      # ------------------------------------------------------------
+      # 5) Setup Terraform
+      # ------------------------------------------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
 
+      # ------------------------------------------------------------
+      # 6) Terraform checks
+      # ------------------------------------------------------------
       - name: Terraform fmt
         run: terraform fmt -check -recursive
 
       - name: Terraform init (staging backend)
+        env:
+          # Force Terraform provider to use ADC file generated by auth@v2
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID_STAGING }}
         run: terraform init -backend-config=envs/staging/backend.hcl -reconfigure
 
       - name: Terraform validate
         run: terraform validate
 
+      # ------------------------------------------------------------
+      # 7) Terraform plan (staging)
+      #    We provide BOTH ADC + explicit access token to avoid ambiguity.
+      # ------------------------------------------------------------
       - name: Terraform plan (staging)
-        run: terraform plan -var-file=envs/staging/terraform.tfvars
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID_STAGING }}
+        run: terraform plan -var-file=envs/staging/terraform.tfvars -no-color
