@@ -25,15 +25,28 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud (WIF)
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
           token_format: "access_token"
+          create_credentials_file: true
           export_environment_variables: true
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Verify SA identity
+        run: |
+          echo "ADC file: $GOOGLE_APPLICATION_CREDENTIALS"
+          gcloud auth list
+          gcloud config get-value account
+          gcloud iam service-accounts describe "${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}" \
+            --project="${{ secrets.GCP_PROJECT_ID }}" \
+            --format="value(email)"
 
       - name: Debug identity (full)
         run: |
