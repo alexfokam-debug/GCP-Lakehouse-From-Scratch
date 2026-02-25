@@ -23,6 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Debug - secrets presence (safe)
+        run: |
+          set -euo pipefail
+          [ -n "${{ secrets.GCP_WIF_PROVIDER_STAGING }}" ] && echo "provider: OK" || echo "provider: EMPTY"
+          [ -n "${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}" ] && echo "sa: OK" || echo "sa: EMPTY"
+          [ -n "${{ secrets.GCP_PROJECT_ID_STAGING }}" ] && echo "project: OK" || echo "project: EMPTY"
+
       # 0) Debug context
       - name: Debug - context
         run: |
