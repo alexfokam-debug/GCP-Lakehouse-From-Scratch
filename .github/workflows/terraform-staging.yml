@@ -1,4 +1,4 @@
-name: "ci: terraform plan staging via WIF"
+name: ci: terraform plan staging via WIF
 
 on:
   workflow_dispatch:
@@ -16,43 +16,42 @@ jobs:
   terraform-plan-staging:
     runs-on: ubuntu-latest
 
-    env:
-      # Force le projet GCP (évite les 403 “mauvais projet”)
-      GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
-      CLOUDSDK_CORE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
-
-      # Passe le project_id à Terraform via TF_VAR_ (même si tfvars est mauvais, ça t’aide à détecter)
-      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
-
-      # Optionnel (utile si tu as des libs qui lisent ça)
-      TF_IN_AUTOMATION: "true"
+    defaults:
+      run:
+        shell: bash
+        working-directory: terraform
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # WIF: spécifier EXACTEMENT workload_identity_provider + service_account
       - name: Authenticate to Google Cloud (WIF)
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
           token_format: "access_token"
-          create_credentials_file: true
           export_environment_variables: true
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # Debug: on vérifie identité + projet (ultra utile)
-      - name: Debug identity + project
+      - name: Debug identity (full)
         run: |
+          echo "== access token audience test =="
+          gcloud auth print-access-token >/dev/null && echo "token OK"
+
           echo "== gcloud auth list =="
-          gcloud auth list
+          gcloud auth list --format="json" | cat
+
+          echo "== who am I (tokeninfo) =="
+          TOKEN="$(gcloud auth print-access-token)"
+          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${TOKEN}" | cat
+
           echo "== gcloud config list =="
           gcloud config list
-          echo "== project from secret =="
-          gcloud projects describe "${{ secrets.GCP_PROJECT_ID }}" --format="value(projectId,projectNumber)"
+
+          echo "== project describe =="
+          gcloud projects describe "${{ secrets.GCP_PROJECT_ID }}" --format="value(projectId)"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -60,21 +59,15 @@ jobs:
           terraform_version: 1.7.5
 
       - name: Terraform fmt (check)
-        working-directory: terraform
         run: terraform fmt -check -recursive
 
       - name: Terraform Init (staging backend)
-        working-directory: terraform
         run: terraform init -backend-config=envs/staging/backend.hcl -reconfigure
 
       - name: Terraform Validate
-        working-directory: terraform
         run: terraform validate
 
       - name: Terraform Plan (staging)
-        working-directory: terraform
-        run: |
-          terraform plan \
-            -var-file=envs/staging/terraform.tfvars \
-            -var="manage_wif=false" \
-            -lock-timeout=5m
+        env:
+          TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+        run: terraform plan -var-file=envs/staging/terraform.tfvars
