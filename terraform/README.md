@@ -76,3 +76,4 @@ The RAW bucket is configured with:
   * audit and rollback capabilities
 
 These settings align with Google Cloud best practices for enterprise data platforms.
+
