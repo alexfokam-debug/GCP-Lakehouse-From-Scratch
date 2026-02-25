@@ -1,12 +1,9 @@
-name: "ci: terraform plan staging via WIF"
+name: Terraform (staging) - plan
 
 on:
-  workflow_dispatch:
   push:
-    branches: ["main"]
-    paths:
-      - "terraform/**"
-      - ".github/workflows/terraform-plan-staging.yml"
+    branches: [ "main" ]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,12 +15,13 @@ jobs:
 
     defaults:
       run:
-        shell: bash
         working-directory: terraform
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      # 1) Auth WIF -> récupère un access_token
       - name: Authenticate to Google Cloud (WIF)
         id: auth
         uses: google-github-actions/auth@v2
@@ -34,53 +32,36 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
+      # 2) gcloud (optionnel mais utile pour debug)
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Verify SA identity
+      - name: Verify identity (debug)
         run: |
           echo "ADC file: $GOOGLE_APPLICATION_CREDENTIALS"
           gcloud auth list
+          gcloud config get-value project
           gcloud config get-value account
-          gcloud iam service-accounts describe "${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}" \
-            --project="${{ secrets.GCP_PROJECT_ID }}" \
-            --format="value(email)"
-
-      - name: Debug identity (full)
-        run: |
-          echo "== access token audience test =="
-          gcloud auth print-access-token >/dev/null && echo "token OK"
-
-          echo "== gcloud auth list =="
-          gcloud auth list --format="json" | cat
-
-          echo "== who am I (tokeninfo) =="
-          TOKEN="$(gcloud auth print-access-token)"
-          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${TOKEN}" | cat
-
-          echo "== gcloud config list =="
-          gcloud config list
-
-          echo "== project describe =="
-          gcloud projects describe "${{ secrets.GCP_PROJECT_ID }}" --format="value(projectId)"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
 
-      - name: Terraform fmt (check)
+      - name: Terraform fmt
         run: terraform fmt -check -recursive
 
-      - name: Terraform Init (staging backend)
+      - name: Terraform init (staging backend)
         run: terraform init -backend-config=envs/staging/backend.hcl -reconfigure
 
-      - name: Terraform Validate
+      - name: Terraform validate
         run: terraform validate
 
-      - name: Terraform Plan (staging)
+      # 3) IMPORTANT : on force Terraform à utiliser le token du step auth
+      - name: Terraform plan (staging)
         env:
-          TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
         run: terraform plan -var-file=envs/staging/terraform.tfvars
