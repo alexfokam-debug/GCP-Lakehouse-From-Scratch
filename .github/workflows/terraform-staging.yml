@@ -14,6 +14,7 @@ jobs:
   terraform-plan-staging:
     name: terraform-plan-staging
     runs-on: ubuntu-latest
+    environment: staging
 
     defaults:
       run:
