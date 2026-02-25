@@ -5,7 +5,7 @@ output "dataform_service_account_email" {
 
 output "github_wif_provider" {
   description = "Full resource name of the GitHub WIF provider"
-  value       = google_iam_workload_identity_pool_provider.github.name
+  value       = try(google_iam_workload_identity_pool_provider.github[0].name, null)
 }
 
 output "github_cicd_sa_email" {

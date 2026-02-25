@@ -28,7 +28,7 @@ resource "google_secret_manager_secret" "dataform_git_token" {
   count = var.create_dataform_git_token_secret ? 1 : 0
 
   project   = var.project_id
-  secret_id = var.git_token_secret_id  # par défaut "dataform-git-token"
+  secret_id = var.git_token_secret_id # par défaut "dataform-git-token"
 
   # ---------------------------------------------------------------------------
   # Replication

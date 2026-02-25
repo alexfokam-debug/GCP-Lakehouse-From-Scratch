@@ -21,6 +21,7 @@
 # 1) Workload Identity Pool (conteneur d'identités externes)
 # ------------------------------------------------------------
 resource "google_iam_workload_identity_pool" "github" {
+  count    = var.manage_wif ? 1 : 0
   provider = google-beta
 
   # Projet où vit le pool WIF
@@ -40,12 +41,12 @@ resource "google_iam_workload_identity_pool" "github" {
 # 2) Provider OIDC GitHub (déclare la confiance GitHub -> GCP)
 # ------------------------------------------------------------
 resource "google_iam_workload_identity_pool_provider" "github" {
+  count    = var.manage_wif ? 1 : 0
   provider = google-beta
 
   # Projet + pool
   project                   = var.project_id
-  workload_identity_pool_id = google_iam_workload_identity_pool.github.workload_identity_pool_id
-
+  workload_identity_pool_id = google_iam_workload_identity_pool.github[0].workload_identity_pool_id
   # ID du provider (unique dans le pool)
   workload_identity_pool_provider_id = "github-provider-${var.environment}"
 
@@ -103,6 +104,8 @@ resource "google_service_account" "github_cicd" {
 # 4) Autoriser GitHub (WIF) à impersonate le SA
 # ------------------------------------------------------------
 resource "google_service_account_iam_member" "github_cicd_wif" {
+  count = var.manage_wif ? 1 : 0
+
   # SA cible
   service_account_id = google_service_account.github_cicd.name
 
@@ -111,7 +114,7 @@ resource "google_service_account_iam_member" "github_cicd_wif" {
 
   # Groupe d'identités autorisées (principalSet) filtré sur repo
   # => Seuls les tokens dont attribute.repository == owner/repo passent
-  member = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repository}"
+  member = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github[0].name}/attribute.repository/${var.github_repository}"
 }
 
 # ------------------------------------------------------------

@@ -232,6 +232,12 @@ Si true, Terraform crée le secret 'dataform-git-token' dans le projet courant.
 Si false, on suppose qu'on utilise un secret existant (souvent centralisé),
 et on ne crée rien dans le projet d'environnement.
 EOT
-  type    = bool
-  default = false
+  type        = bool
+  default     = false
+}
+
+variable "manage_wif" {
+  type        = bool
+  description = "Whether Terraform should manage GitHub Workload Identity Federation resources."
+  default     = true
 }

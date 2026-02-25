@@ -109,5 +109,6 @@ dataform_sa_email = "sa-dataform-staging@lakehouse-stg-486419.iam.gserviceaccoun
 github_repository = "alexfokam-debug/GCP-Lakehouse-From-Scratch"
 
 # Bucket remote state (si tu utilises une variable)
-tf_state_bucket_name = "lakehouse-terraform-states-486419"
+tf_state_bucket_name             = "lakehouse-terraform-states-486419"
 create_dataform_git_token_secret = false
+manage_wif                       = true

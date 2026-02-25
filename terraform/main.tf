@@ -507,6 +507,7 @@ module "iam" {
   # Dataform runtime SA (email) – fourni par tfvars pour l’instant
   dataform_sa_email = var.dataform_sa_email
 
+
   # Buckets (source de vérité = outputs modules)
   raw_bucket_name           = module.gcs_raw.bucket_name
   iceberg_bucket_name       = module.gcs_iceberg.bucket_name
@@ -534,6 +535,7 @@ module "iam" {
 
   # Secret id (pas le full resource name)
   git_token_secret_id = var.git_token_secret_id
+  manage_wif          = var.manage_wif
 }
 
 # =============================================================================

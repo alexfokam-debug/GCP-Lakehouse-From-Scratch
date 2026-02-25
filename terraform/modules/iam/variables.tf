@@ -132,3 +132,9 @@ variable "project_number" {
   type        = string
   default     = ""
 }
+
+variable "manage_wif" {
+  type        = bool
+  description = "Manage GitHub WIF resources in this module."
+  default     = true
+}
