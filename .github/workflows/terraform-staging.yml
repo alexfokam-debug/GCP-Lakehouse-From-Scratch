@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   terraform-plan-staging:
+    environment: staging
     runs-on: ubuntu-latest
 
     defaults:
@@ -23,9 +24,9 @@ jobs:
         uses: actions/checkout@v4
 
       # =========================
-      # 0) PRECHECK - Vars OR Secrets
+      # 0) PRECHECK - resolve config from vars/secrets
       # =========================
-      - name: Precheck - resolve config from vars/secrets
+      - name: Precheck - resolve config (vars -> secrets fallback)
         id: cfg
         shell: bash
         run: |
@@ -36,29 +37,25 @@ jobs:
           echo "actor=${GITHUB_ACTOR}"
           echo "repo=${GITHUB_REPOSITORY}"
 
-          # Prefer repository variables, fallback to secrets
+          # Prefer repo variables, fallback to secrets
           PROJECT_ID="${{ vars.GCP_PROJECT_ID_STAGING }}"
           WIF_PROVIDER="${{ vars.GCP_WIF_PROVIDER_STAGING }}"
           WIF_SA="${{ vars.GCP_WIF_SERVICE_ACCOUNT_STAGING }}"
 
-          if [[ -z "$PROJECT_ID" ]]; then PROJECT_ID="${{ secrets.GCP_PROJECT_ID_STAGING }}"; fi
-          if [[ -z "$WIF_PROVIDER" ]]; then WIF_PROVIDER="${{ secrets.GCP_WIF_PROVIDER_STAGING }}"; fi
-          if [[ -z "$WIF_SA" ]]; then WIF_SA="${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}"; fi
+          if [[ -z "${PROJECT_ID}" ]]; then PROJECT_ID="${{ secrets.GCP_PROJECT_ID_STAGING }}"; fi
+          if [[ -z "${WIF_PROVIDER}" ]]; then WIF_PROVIDER="${{ secrets.GCP_WIF_PROVIDER_STAGING }}"; fi
+          if [[ -z "${WIF_SA}" ]]; then WIF_SA="${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}"; fi
 
-          echo "Resolved:"
-          echo " - PROJECT_ID = ${PROJECT_ID:-EMPTY}"
-          echo " - WIF_PROVIDER = ${WIF_PROVIDER:-EMPTY}"
-          echo " - WIF_SA = ${WIF_SA:-EMPTY}"
+          [[ -n "${PROJECT_ID}" ]] || (echo "❌ Missing config: GCP_PROJECT_ID_STAGING (vars or secrets)" && exit 1)
+          [[ -n "${WIF_PROVIDER}" ]] || (echo "❌ Missing config: GCP_WIF_PROVIDER_STAGING (vars or secrets)" && exit 1)
+          [[ -n "${WIF_SA}" ]] || (echo "❌ Missing config: GCP_WIF_SERVICE_ACCOUNT_STAGING (vars or secrets)" && exit 1)
 
-          [[ -n "$PROJECT_ID" ]] || (echo "❌ Missing config: GCP_PROJECT_ID_STAGING (vars or secrets)" && exit 1)
-          [[ -n "$WIF_PROVIDER" ]] || (echo "❌ Missing config: GCP_WIF_PROVIDER_STAGING (vars or secrets)" && exit 1)
-          [[ -n "$WIF_SA" ]] || (echo "❌ Missing config: GCP_WIF_SERVICE_ACCOUNT_STAGING (vars or secrets)" && exit 1)
+          echo "Resolved OK (masked in logs by GitHub)."
 
-          # Export outputs for next steps
           {
-            echo "project_id=$PROJECT_ID"
-            echo "wif_provider=$WIF_PROVIDER"
-            echo "wif_sa=$WIF_SA"
+            echo "project_id=${PROJECT_ID}"
+            echo "wif_provider=${WIF_PROVIDER}"
+            echo "wif_sa=${WIF_SA}"
           } >> "$GITHUB_OUTPUT"
 
       # =========================
@@ -75,7 +72,7 @@ jobs:
           token_format: "access_token"
 
       # =========================
-      # 2) Setup gcloud (debug)
+      # 2) Setup gcloud (for debug + optional tagging)
       # =========================
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
@@ -83,31 +80,60 @@ jobs:
           project_id: ${{ steps.cfg.outputs.project_id }}
 
       # =========================
-      # 3) Debug identity + token
+      # 3) Debug minimal (safe)
       # =========================
-      - name: Debug - identity & tokeninfo
+      - name: Debug - identity (safe)
         shell: bash
         run: |
           set -euo pipefail
+
           echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-NOT_SET}"
           gcloud config set project "${{ steps.cfg.outputs.project_id }}" --quiet
 
           echo "== gcloud auth list =="
           gcloud auth list
 
-          echo "== gcloud config =="
-          gcloud config list
-
-          echo "== tokeninfo (whoami) =="
+          echo "== who am I (tokeninfo) =="
           ACCESS_TOKEN="$(gcloud auth print-access-token)"
           curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" | jq -r '.email,.aud,.azp'
 
-          echo "== permission check: project describe =="
+          echo "== project describe (permission check) =="
           gcloud projects describe "${{ steps.cfg.outputs.project_id }}" --format="value(projectId)" >/dev/null
           echo "OK: can read project"
 
       # =========================
-      # 4) Terraform
+      # 4) OPTIONAL: fix the "environment tag" warning
+      #    (disable by default; set ENABLE_ENV_TAG=true to run)
+      # =========================
+      - name: (Optional) Add project environment tag (staging)
+        if: ${{ vars.ENABLE_ENV_TAG == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT_ID="${{ steps.cfg.outputs.project_id }}"
+          echo "Tagging project ${PROJECT_ID} with environment=Staging"
+
+          # NOTE:
+          # - This requires Resource Manager Tags permissions.
+          # - If you haven't created the TagKey/TagValue, this will fail.
+          #
+          # Recommended approach:
+          # 1) Create TagKey "environment"
+          # 2) Create TagValue "Staging"
+          # 3) Bind TagValue to the project
+          #
+          # Example (pseudo):
+          # gcloud resource-manager tags keys list
+          # gcloud resource-manager tags values list --parent=tagKeys/XXXX
+          # gcloud resource-manager tags bindings create \
+          #   --tag-value=tagValues/YYYY \
+          #   --parent=//cloudresourcemanager.googleapis.com/projects/${PROJECT_NUMBER}
+
+          echo "Skipped actual commands by design (needs your TagKey/TagValue ids)."
+
+      # =========================
+      # 5) Terraform
       # =========================
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
