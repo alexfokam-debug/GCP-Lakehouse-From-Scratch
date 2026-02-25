@@ -32,7 +32,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Auth GitHub -> GCP via Workload Identity Federation
+      # ✅ Fail fast si le secret n’est pas injecté
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.GCP_WIF_PROVIDER_STAGING }}" ]; then
+            echo "❌ Missing secret: GCP_WIF_PROVIDER_STAGING"
+            exit 1
+          fi
+
       - name: Auth to Google Cloud (WIF)
         id: auth
         uses: google-github-actions/auth@v2
@@ -47,28 +54,6 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: "lakehouse-stg-486419"
-
-      # Debug utile (à garder tant que ce n’est pas stable)
-      - name: Debug - who is Terraform actually using?
-        run: |
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
-          echo "== creds file (safe fields) =="
-          sudo apt-get update -y >/dev/null 2>&1 || true
-          sudo apt-get install -y jq >/dev/null 2>&1 || true
-          cat "$GOOGLE_APPLICATION_CREDENTIALS" | jq -r '.type, .audience, .subject_token_type, (.service_account_impersonation_url // "NO_IMPERSONATION_URL")'
-
-          echo "== gcloud auth list =="
-          gcloud auth list
-
-          echo "== gcloud config list =="
-          gcloud config list
-
-          echo "== tokeninfo (email/aud/azp) =="
-          ACCESS_TOKEN="$(gcloud auth print-access-token)"
-          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" | jq -r '.email,.aud,.azp'
-
-          echo "== SA expected =="
-          echo "${STAGING_SA}"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
