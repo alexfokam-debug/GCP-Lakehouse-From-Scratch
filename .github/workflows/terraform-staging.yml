@@ -11,7 +11,35 @@ permissions:
   id-token: write
 
 jobs:
+  # ✅ Job PR : pas de secrets, pas d'auth, juste qualité Terraform
+  terraform-ci:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init (local, no backend)
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+
+  # ✅ Job main : auth WIF + backend GCS + plan staging
   terraform-plan-staging:
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     environment: staging   # IMPORTANT si tes secrets sont dans Environment "staging"
 
@@ -20,12 +48,15 @@ jobs:
         working-directory: terraform
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Auth WIF (ADC) -> crée un fichier credentials utilisé par Terraform provider google
+      - name: Fail fast if secrets missing
+        run: |
+          [ -n "${{ secrets.GCP_WIF_PROVIDER_STAGING }}" ] || (echo "❌ Missing secret: GCP_WIF_PROVIDER_STAGING" && exit 1)
+          [ -n "${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}" ] || (echo "❌ Missing secret: GCP_WIF_SERVICE_ACCOUNT_STAGING" && exit 1)
+          [ -n "${{ secrets.GCP_PROJECT_ID_STAGING }}" ] || (echo "❌ Missing secret: GCP_PROJECT_ID_STAGING" && exit 1)
+
       - name: Authenticate to Google Cloud (WIF)
-        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
@@ -33,24 +64,12 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      # gcloud (facultatif mais utile)
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID_STAGING }}
 
-      - name: Debug - identity + project (safe)
-        run: |
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
-          echo "Active project:"
-          gcloud config get-value project
-          echo "Active account:"
-          gcloud config get-value account
-          echo "gcloud auth list:"
-          gcloud auth list
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
 
@@ -64,6 +83,4 @@ jobs:
         run: terraform validate
 
       - name: Terraform plan (staging)
-        env:
-          TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID_STAGING }}
         run: terraform plan -var-file=envs/staging/terraform.tfvars
