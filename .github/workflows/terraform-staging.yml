@@ -1,10 +1,12 @@
-name: Terraform (staging) - plan
+name: Terraform - Staging (Plan)
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
-  pull_request:
-  workflow_dispatch:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-staging.yml"
 
 permissions:
   contents: read
@@ -16,42 +18,64 @@ jobs:
 
     defaults:
       run:
+        shell: bash
         working-directory: terraform
+
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      GOOGLE_CLOUD_PROJECT: "lakehouse-stg-486419"
+      PROJECT_ID: "lakehouse-stg-486419"
+      STAGING_SA: "sa-github-cicd-staging@lakehouse-stg-486419.iam.gserviceaccount.com"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1) Auth WIF -> récupère un access_token
-      - name: Authenticate to Google Cloud (WIF)
+      # Auth GitHub -> GCP via Workload Identity Federation
+      - name: Auth to Google Cloud (WIF)
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
           token_format: "access_token"
           create_credentials_file: true
           export_environment_variables: true
+          workload_identity_provider: "${{ secrets.GCP_WIF_PROVIDER_STAGING }}"
+          service_account: "sa-github-cicd-staging@lakehouse-stg-486419.iam.gserviceaccount.com"
 
-      # 2) gcloud (optionnel mais utile pour debug)
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          project_id: "lakehouse-stg-486419"
 
-      - name: Verify identity (debug)
+      # Debug utile (à garder tant que ce n’est pas stable)
+      - name: Debug - who is Terraform actually using?
         run: |
-          echo "ADC file: $GOOGLE_APPLICATION_CREDENTIALS"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
+          echo "== creds file (safe fields) =="
+          sudo apt-get update -y >/dev/null 2>&1 || true
+          sudo apt-get install -y jq >/dev/null 2>&1 || true
+          cat "$GOOGLE_APPLICATION_CREDENTIALS" | jq -r '.type, .audience, .subject_token_type, (.service_account_impersonation_url // "NO_IMPERSONATION_URL")'
+
+          echo "== gcloud auth list =="
           gcloud auth list
-          gcloud config get-value project
-          gcloud config get-value account
+
+          echo "== gcloud config list =="
+          gcloud config list
+
+          echo "== tokeninfo (email/aud/azp) =="
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" | jq -r '.email,.aud,.azp'
+
+          echo "== SA expected =="
+          echo "${STAGING_SA}"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_version: "1.7.5"
 
-      - name: Terraform fmt
+      - name: Terraform fmt (check)
         run: terraform fmt -check -recursive
 
       - name: Terraform init (staging backend)
@@ -60,9 +84,5 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
-      # 3) IMPORTANT : on force Terraform à utiliser le token du step auth
       - name: Terraform plan (staging)
-        env:
-          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
-          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
         run: terraform plan -var-file=envs/staging/terraform.tfvars
