@@ -12,6 +12,8 @@ permissions:
 jobs:
   terraform-plan-staging:
     runs-on: ubuntu-latest
+    environment: staging
+
 
     defaults:
       run:
