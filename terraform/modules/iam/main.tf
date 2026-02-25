@@ -330,3 +330,8 @@ resource "google_project_iam_member" "github_cicd_secret_admin" {
   role    = "roles/secretmanager.admin"
   member  = "serviceAccount:${google_service_account.github_cicd.email}"
 }
+resource "google_project_iam_member" "github_cicd_wif_pool_admin" {
+  project = var.project_id
+  role    = "roles/iam.workloadIdentityPoolAdmin"
+  member  = "serviceAccount:${google_service_account.github_cicd.email}"
+}
