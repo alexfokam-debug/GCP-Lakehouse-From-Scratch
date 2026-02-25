@@ -77,3 +77,4 @@ The RAW bucket is configured with:
 
 These settings align with Google Cloud best practices for enterprise data platforms.
 
+
