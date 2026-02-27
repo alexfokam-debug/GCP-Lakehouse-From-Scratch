@@ -1,53 +1,80 @@
+###############################################################################
+# TERRAFORM
+###############################################################################
 
-# ---- Terraform (local state / providers) ----
-terraform/.terraform/
+# Local Terraform working directories
 **/.terraform/
-terraform/.terraform.lock.hcl
-**/.terraform.lock.hcl
 
-# tfstate (ne jamais versionner)
+# Terraform state (NEVER commit)
 *.tfstate
 *.tfstate.*
 
-# ---- Python / venv ----
-**/__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-.venv/
-venv/
-
-# ---- Local data / temp ----
-data/
-.tmp_sql_rendered/
-# ---- IDE / OS ----
-.idea/
-.DS_Store
-
-# ---- Logs / build ----
-*.log
-dist/
-build/
-*.egg-info/
-
-# Terraform (global)
-.terraform/
-.terraform.lock.hcl
+# Crash logs
 crash.log
 crash.*.log
-*.tfvars
-*.tfvars.json
+
+# Terraform plan outputs
+**/plan*.out
+**/plan*.tfplan
+
+# Override files
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
 
-# macOS
+# Lock file backup (optional)
+*.terraform.lock.hcl.backup
+
+###############################################################################
+# ⚠️ IMPORTANT
+# If you version your envs/*/terraform.tfvars intentionally,
+# DO NOT ignore *.tfvars globally.
+#
+# If you want to ignore only local tfvars, use instead:
+# *.auto.tfvars
+###############################################################################
+
+###############################################################################
+# PYTHON
+###############################################################################
+
+# Bytecode
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+.env/
+
+# Packaging
+dist/
+build/
+*.egg-info/
+pip-wheel-metadata/
+
+###############################################################################
+# IDE / EDITORS
+###############################################################################
+
+.idea/
+.vscode/
+
+###############################################################################
+# OS FILES
+###############################################################################
+
+.DS_Store
 .AppleDouble
 .LSOverride
 
-# Python
-.env
-pip-wheel-metadata/
+###############################################################################
+# PROJECT TEMP / LOCAL DATA
+###############################################################################
 
+data/
+.tmp_sql_rendered/
+*.log
