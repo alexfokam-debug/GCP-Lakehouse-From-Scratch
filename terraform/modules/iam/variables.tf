@@ -138,3 +138,9 @@ variable "manage_wif" {
   description = "Manage GitHub WIF resources in this module."
   default     = true
 }
+
+variable "enable_github_cicd_wif_pool_admin" {
+  description = "Si true, donne au SA GitHub CI/CD le rôle workloadIdentityPoolAdmin (à éviter en safe mode)."
+  type        = bool
+  default     = false
+}

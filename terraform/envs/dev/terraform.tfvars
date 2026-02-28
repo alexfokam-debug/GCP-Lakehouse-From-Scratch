@@ -113,8 +113,7 @@ git_token_secret_id = "dataform-git-token"
 # -> Si tu laisses ça, il faut gérer IAM cross-project => source d’erreurs
 # -> On coupe en DEV pour ne pas tourner en rond.
 # ---------------------------------------------------------------------------
-dataform_git_token_secret_version = "projects/518653594867/secrets/dataform-git-token/versions/latest"
-
+dataform_git_token_secret_version = "projects/lakehouse-486419/secrets/dataform-git-token/versions/latest"
 
 ##############################################################################
 # CURATED BigLake tables (Iceberg) - optionnel
@@ -238,3 +237,5 @@ tf_state_bucket_name = "lakehouse-terraform-states-486419"
 bootstrap_ci_iam = false
 
 create_dataform_git_token_secret = true
+
+enable_github_cicd_wif_pool_admin = false
