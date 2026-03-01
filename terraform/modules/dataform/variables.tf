@@ -135,3 +135,8 @@ variable "repo_display_name" {
   type        = string
   default     = ""
 }
+variable "dataform_git_token_secret_id" {
+  description = "Secret ID (ex: dataform-git-token) stored in Secret Manager for Dataform Git authentication"
+  type        = string
+  default     = ""
+}

@@ -172,3 +172,14 @@ variable "dataform_time_zone" {
   type    = string
   default = "Europe/Paris"
 }
+variable "enable_git" {
+  description = "Enable git integration for Dataform repository"
+  type        = bool
+  default     = false
+}
+
+variable "dataform_git_token_secret_id" {
+  description = "Secret Manager secret_id containing the Git token"
+  type        = string
+  default     = ""
+}

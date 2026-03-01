@@ -90,7 +90,8 @@ dataform_sa_email = "sa-dataform-dev@lakehouse-486419.iam.gserviceaccount.com"
 # ---------------------------------------------------------------------------
 # Full path version attendu par l’API Dataform (souvent "latest")
 dataform_git_token_secret_version = "projects/lakehouse-486419/secrets/dataform-git-token/versions/latest"
-
+enable_git                        = true
+# dataform_git_token_secret_id = "dataform-git-token"
 
 ##############################################################################
 # CURATED BigLake tables (Iceberg) - optionnel

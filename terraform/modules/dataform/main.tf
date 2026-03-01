@@ -22,19 +22,31 @@
 # - éviter la suppression accidentelle du bloc git_remote_settings
 #   quand une variable est vide / non passée
 ###############################################################################
-locals {
-  # Normalisation (évite null / espaces)
-  git_repo_url_norm             = trimspace(coalesce(var.dataform_git_repo_url, ""))
-  git_token_secret_version_norm = trimspace(coalesce(var.dataform_git_token_secret_version, ""))
 
-  # Git activé seulement si enable_git + url + secret_version non vides
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
+locals {
+  git_repo_url_norm = trimspace(var.dataform_git_repo_url)
+
+  # si tu fournis directement la version (projects/.../versions/latest), on l’utilise
+  git_token_secret_version_norm = trimspace(var.dataform_git_token_secret_version)
+
+  # fallback si tu donnes juste l'ID du secret
+  git_token_secret_id_norm = trimspace(var.dataform_git_token_secret_id)
+
+  git_token_secret_version_effective = (
+    local.git_token_secret_version_norm != "" ? local.git_token_secret_version_norm :
+    (local.git_token_secret_id_norm != "" ? "projects/${var.project_id}/secrets/${local.git_token_secret_id_norm}/versions/latest" : "")
+  )
+
   git_enabled = alltrue([
     var.enable_git,
     local.git_repo_url_norm != "",
-    local.git_token_secret_version_norm != "",
+    local.git_token_secret_version_effective != "",
   ])
 }
-
 ###############################################################################
 # 1) Dataform Repository
 ###############################################################################
@@ -71,7 +83,7 @@ resource "google_dataform_repository" "this" {
       default_branch = var.dataform_default_branch
 
       # PAT Git via Secret Manager (version)
-      authentication_token_secret_version = local.git_token_secret_version_norm
+      authentication_token_secret_version = local.git_token_secret_version_effective
     }
   }
 }
