@@ -36,14 +36,30 @@ jobs:
           echo "repo=${GITHUB_REPOSITORY}"
 
           # Vars
-          : "${{ vars.GCP_PROJECT_ID_DEV }}"
-          : "${{ vars.TF_STATE_BUCKET_DEV }}"
+          : "$PROJECT_ID"
+          : "$TF_BUCKET"
           echo "Vars OK"
 
           # Secrets
           : "${{ secrets.GCP_WIF_PROVIDER_DEV }}"
           : "${{ secrets.GCP_WIF_SA_DEV }}"
           echo "Secrets OK (masked)"
+        
+      - name: Normalize DEV vars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT_ID="$(printf '%s' "$PROJECT_ID" | tr -d '\r\n' | xargs)"
+          TF_BUCKET="$(printf '%s' "$TF_BUCKET" | tr -d '\r\n' | xargs)"
+
+          echo "PROJECT_ID=${PROJECT_ID}" >> "$GITHUB_ENV"
+          echo "TF_BUCKET=${TF_BUCKET}" >> "$GITHUB_ENV"
+
+          echo "PROJECT_ID=[${PROJECT_ID}]"
+          echo "TF_BUCKET=[${TF_BUCKET}]"    
+              
+        
 
       # 1) Auth via WIF (ADC)
       - name: Authenticate to Google Cloud (WIF)
@@ -59,14 +75,14 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ vars.GCP_PROJECT_ID_DEV }}
+          project_id: $PROJECT_ID
 
       # 2bis) Force project context everywhere (avoid "lakehouse-dev" confusion)
       - name: Force project env (fail fast)
         shell: bash
         run: |
           set -euo pipefail
-          PROJECT_ID="${{ vars.GCP_PROJECT_ID_DEV }}"
+          PROJECT_ID="$PROJECT_ID"
           if [[ -z "$PROJECT_ID" ]]; then
             echo "❌ vars.GCP_PROJECT_ID_DEV is empty"
             exit 1
@@ -104,11 +120,12 @@ jobs:
           fi
 
           echo "== project describe (permission check) =="
-          gcloud projects describe "${{ vars.GCP_PROJECT_ID_DEV }}" >/dev/null && echo "OK: can read project" || true
+          gcloud projects describe "$PROJECT_ID" >/dev/null && echo "OK: can read project" || true
       # 4) Impersonation test (debug only - do NOT fail the job here)
       # NOTE: In CI with google-github-actions/auth, you typically DO NOT need
       # --impersonate-service-account; the action already minted creds for that SA.
       - name: Impersonation test (debug)
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -127,7 +144,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PROJECT="${{ vars.GCP_PROJECT_ID_DEV }}"
+          PROJECT="$PROJECT_ID"
 
           echo "== Secret Manager probe =="
           gcloud secrets list --project "${PROJECT}" --limit=5 >/dev/null
@@ -161,7 +178,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BUCKET="${{ vars.TF_STATE_BUCKET_DEV }}"
+          BUCKET="$TF_BUCKET"
           echo "== bucket ls =="
           gcloud storage ls "gs://${BUCKET}/" >/dev/null && echo "OK: bucket reachable"
 
@@ -189,7 +206,7 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=terraform/foundation init -reconfigure \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET_DEV }}" \
+            -backend-config="bucket=$TF_BUCKET" \
             -backend-config="prefix=foundation/dev"
 
       - name: Terraform validate (foundation)
@@ -211,8 +228,8 @@ jobs:
       - name: Terraform plan (foundation/dev)
         shell: bash
         env:
-          CLOUDSDK_CORE_PROJECT: ${{ vars.GCP_PROJECT_ID_DEV }}
-          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID_DEV }}
+          CLOUDSDK_CORE_PROJECT: $PROJECT_ID
+          GOOGLE_CLOUD_PROJECT: $PROJECT_ID
         run: |
           set -euo pipefail
           terraform -chdir=terraform/foundation plan \
@@ -241,7 +258,7 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=terraform/lakehouse init -reconfigure \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET_DEV }}" \
+            -backend-config="bucket=$TF_BUCKET" \
             -backend-config="prefix=lakehouse/dev"
 
       - name: Terraform validate (lakehouse)
@@ -263,8 +280,8 @@ jobs:
       - name: Terraform plan (lakehouse/dev)
         shell: bash
         env:
-          CLOUDSDK_CORE_PROJECT: ${{ vars.GCP_PROJECT_ID_DEV }}
-          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID_DEV }}
+          CLOUDSDK_CORE_PROJECT: $PROJECT_ID
+          GOOGLE_CLOUD_PROJECT: $PROJECT_ID
         run: |
           set -euo pipefail
           terraform -chdir=terraform/lakehouse plan \
