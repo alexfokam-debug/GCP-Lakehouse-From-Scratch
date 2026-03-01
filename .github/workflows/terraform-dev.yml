@@ -26,15 +26,23 @@ permissions:
 
 jobs:
   terraform-plan-dev:
+    # ✅ IMPORTANT : "environment: dev" permet d'utiliser
+    # - les "Environment secrets"
+    # - les "Environment variables"
+    # et d'appliquer des protections (approvals, etc.) en entreprise.
     environment: dev
+
     runs-on: ubuntu-latest
 
-    # ✅ Job-level env : accessible partout (dans bash via $PROJECT_ID / $TF_BUCKET
-    # et dans YAML via ${{ env.PROJECT_ID }} / ${{ env.TF_BUCKET }}
+    # ✅ Job-level env : accessible partout (bash via $PROJECT_ID / $TF_BUCKET)
+    # et en YAML via ${{ env.PROJECT_ID }} / ${{ env.TF_BUCKET }}
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID_DEV }}
       TF_BUCKET: ${{ vars.TF_STATE_BUCKET_DEV }}
-      TF_IN_AUTOMATION: "true"  # Standard terraform en CI: logs plus clean, pas d'interactions
+      TF_IN_AUTOMATION: "true"   # Standard Terraform en CI (logs clean, pas d'interactions)
+
+      # (Optionnel) si tu veux des logs Terraform plus détaillés au besoin :
+      # TF_LOG: INFO
 
     steps:
       # ==========================================================
@@ -45,6 +53,7 @@ jobs:
 
       # ==========================================================
       # 1) Fail fast : vérifier présence Vars + Secrets
+      #    -> On échoue tôt si un paramètre critique manque
       # ==========================================================
       - name: Resolve DEV inputs (fail fast)
         shell: bash
@@ -56,12 +65,14 @@ jobs:
           echo "actor=${GITHUB_ACTOR}"
           echo "repo=${GITHUB_REPOSITORY}"
 
-          # Vars (non sensibles) -> doivent être définies dans Settings > Actions > Variables
+          # Vars (non sensibles)
+          # ⚠️ IMPORTANT : vars.* vient de GitHub Actions context
+          # -> si une var n'existe pas, la ligne ":" fera échouer l'étape.
           : "${{ vars.GCP_PROJECT_ID_DEV }}"
           : "${{ vars.TF_STATE_BUCKET_DEV }}"
           echo "Vars OK"
 
-          # Secrets (sensibles) -> doivent être définis dans Settings > Actions > Secrets
+          # Secrets (sensibles)
           : "${{ secrets.GCP_WIF_PROVIDER_DEV }}"
           : "${{ secrets.GCP_WIF_SA_DEV }}"
           echo "Secrets OK (masked)"
@@ -72,14 +83,14 @@ jobs:
 
       # ==========================================================
       # 2) Normalisation : enlever CR/LF + espaces parasites
-      #    -> utile quand on copie/colle dans l'UI GitHub
+      #    -> ultra utile quand on copie/colle dans l'UI GitHub
+      #    -> sinon tu peux te retrouver avec "lakehouse-486419\r"
       # ==========================================================
       - name: Normalize DEV vars (sanitize)
         shell: bash
         run: |
           set -euo pipefail
 
-          # On repart des expressions GitHub (source de vérité) puis on nettoie
           PROJECT_ID_CLEAN="$(printf '%s' "${{ vars.GCP_PROJECT_ID_DEV }}" | tr -d '\r\n' | xargs)"
           TF_BUCKET_CLEAN="$(printf '%s' "${{ vars.TF_STATE_BUCKET_DEV }}" | tr -d '\r\n' | xargs)"
 
@@ -92,7 +103,7 @@ jobs:
             exit 1
           fi
 
-          # On réécrit dans GITHUB_ENV pour que toutes les étapes suivantes utilisent la version clean
+          # On écrase les variables du job avec les versions "clean"
           echo "PROJECT_ID=${PROJECT_ID_CLEAN}" >> "$GITHUB_ENV"
           echo "TF_BUCKET=${TF_BUCKET_CLEAN}"   >> "$GITHUB_ENV"
 
@@ -100,9 +111,9 @@ jobs:
           echo "TF_BUCKET(clean)=${TF_BUCKET_CLEAN}"
 
       # ==========================================================
-      # 3) Auth GCP via WIF (entreprise)
-      #    -> OIDC GitHub -> Workload Identity Provider -> Service Account
-      #    -> Pas besoin d'impersonation dans la majorité des cas
+      # 3) Auth GCP via WIF (standard entreprise)
+      #    - GitHub OIDC -> Workload Identity Provider -> Service Account
+      #    - Génère un fichier credentials (ADC) pour gcloud/terraform/providers
       # ==========================================================
       - name: Authenticate to Google Cloud (WIF)
         id: auth
@@ -114,7 +125,10 @@ jobs:
           export_environment_variables: true
 
       # ==========================================================
-      # 4) Setup gcloud (⚠️ ici c'est une expression GitHub, pas $PROJECT_ID)
+      # 4) Setup gcloud
+      #    ⚠️ IMPORTANT :
+      #    - Dans "with:", on utilise des expressions GitHub : ${{ env.PROJECT_ID }}
+      #    - PAS une variable bash : $PROJECT_ID
       # ==========================================================
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
@@ -123,7 +137,7 @@ jobs:
 
       # ==========================================================
       # 5) Forcer le contexte projet partout
-      #    -> évite la confusion "lakehouse-dev" vs "lakehouse-486419"
+      #    -> évite les surprises, surtout avec différents outils (bq/gsutil)
       # ==========================================================
       - name: Force project env (fail fast)
         shell: bash
@@ -139,7 +153,6 @@ jobs:
             exit 1
           fi
 
-          # Variables standard reconnues par la CLI GCP / libs / terraform provider
           echo "CLOUDSDK_CORE_PROJECT=${PROJECT_ID}" >> "$GITHUB_ENV"
           echo "GOOGLE_CLOUD_PROJECT=${PROJECT_ID}"  >> "$GITHUB_ENV"
           echo "GOOGLE_PROJECT=${PROJECT_ID}"        >> "$GITHUB_ENV"
@@ -148,7 +161,9 @@ jobs:
           echo "Forced PROJECT_ID=${PROJECT_ID}"
 
       # ==========================================================
-      # 6) Debug identité (best effort, ne doit pas casser la CI)
+      # 6) Debug identité (best effort)
+      #    - ne doit PAS casser ton job
+      #    - on garde pour diagnostiquer rapidement si besoin
       # ==========================================================
       - name: Verify identity (debug, best effort)
         shell: bash
@@ -170,10 +185,8 @@ jobs:
 
       # ==========================================================
       # 7) Impersonation test (DEBUG ONLY)
-      #    IMPORTANT:
-      #    - En WIF, l'action auth te donne déjà des creds pour le SA.
-      #    - L'impersonation peut échouer et ce n'est PAS bloquant.
-      #    - On garde juste pour diagnostic.
+      #    - En WIF, tu n'as PAS besoin d'impersonation en général.
+      #    - On garde pour info, mais on ignore les erreurs.
       # ==========================================================
       - name: Impersonation test (debug only, ignore failures)
         continue-on-error: true
@@ -192,8 +205,8 @@ jobs:
 
       # ==========================================================
       # 8) API probes (entreprise)
-      #    - Secret Manager / BigQuery : fail fast (doivent marcher)
-      #    - Dataplex / Dataform : best effort (peut dépendre de l'état des services)
+      #    - SM/BQ: fail fast (indispensables)
+      #    - Dataplex/Dataform: best effort
       # ==========================================================
       - name: API probes (BigQuery / Secret Manager / Dataplex / Dataform)
         shell: bash
@@ -221,7 +234,6 @@ jobs:
           fi
 
           echo "== Dataform probe (best effort) =="
-          # On tente un token mais on n'échoue pas si impossible
           TOKEN="$(gcloud auth print-access-token 2>/dev/null || true)"
           if [ -n "${TOKEN}" ]; then
             curl -s -H "Authorization: Bearer ${TOKEN}" \
@@ -233,7 +245,7 @@ jobs:
           fi
 
       # ==========================================================
-      # 9) Backend sanity : accès au bucket state
+      # 9) Backend sanity : accès bucket state (fail fast)
       # ==========================================================
       - name: Backend sanity (GCS state)
         shell: bash
@@ -257,16 +269,34 @@ jobs:
           terraform_version: 1.7.5
 
       # ==========================================================
-      # FOUNDATION ROOT
+      # 11) ENTERPRISE FIX: purge cache Terraform AVANT init
+      #     Pourquoi ?
+      #     - Les runners GitHub peuvent réutiliser des artefacts/caches internes
+      #     - Un provider téléchargé/caché peut être corrompu / ne plus matcher le lock
+      #     => "cached package does not match checksums"
       # ==========================================================
+
+      # =========================
+      # FOUNDATION ROOT
+      # =========================
       - name: Terraform fmt (foundation)
         shell: bash
         run: terraform -chdir=terraform/foundation fmt -check -recursive
+
+      - name: Clean Terraform cache (foundation)  # ✅ anti "provider checksum mismatch"
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf terraform/foundation/.terraform
 
       - name: Terraform init (foundation/dev backend)
         shell: bash
         run: |
           set -euo pipefail
+
+          # -lockfile=readonly = mode entreprise :
+          # -> la CI refuse de modifier .terraform.lock.hcl
+          # -> si les checksums manquent (linux) -> tu dois régénérer & commit côté dev
           terraform -chdir=terraform/foundation init -reconfigure -lockfile=readonly \
             -backend-config="bucket=${TF_BUCKET}" \
             -backend-config="prefix=foundation/dev"
@@ -282,17 +312,24 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ env.PROJECT_ID }}
         run: terraform -chdir=terraform/foundation plan -compact-warnings -var-file=envs/dev/terraform.tfvars
 
-      # ==========================================================
+      # =========================
       # LAKEHOUSE ROOT
-      # ==========================================================
+      # =========================
       - name: Terraform fmt (lakehouse)
         shell: bash
         run: terraform -chdir=terraform/lakehouse fmt -check -recursive
+
+      - name: Clean Terraform cache (lakehouse)   # ✅ anti "provider checksum mismatch"
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf terraform/lakehouse/.terraform
 
       - name: Terraform init (lakehouse/dev backend)
         shell: bash
         run: |
           set -euo pipefail
+
           terraform -chdir=terraform/lakehouse init -reconfigure -lockfile=readonly \
             -backend-config="bucket=${TF_BUCKET}" \
             -backend-config="prefix=lakehouse/dev"
