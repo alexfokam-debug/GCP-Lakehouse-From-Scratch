@@ -62,39 +62,49 @@ jobs:
           project_id: ${{ vars.GCP_PROJECT_ID_DEV }}
 
       # 2bis) Force project context everywhere (avoid "lakehouse-dev" confusion)
-      - name: Force project env
+      - name: Force project env (fail fast)
         shell: bash
         run: |
           set -euo pipefail
-          echo "CLOUDSDK_CORE_PROJECT=${{ vars.GCP_PROJECT_ID_DEV }}" >> "$GITHUB_ENV"
-          echo "GOOGLE_CLOUD_PROJECT=${{ vars.GCP_PROJECT_ID_DEV }}" >> "$GITHUB_ENV"
-          echo "GCP_PROJECT=${{ vars.GCP_PROJECT_ID_DEV }}" >> "$GITHUB_ENV"
+          PROJECT_ID="${{ vars.GCP_PROJECT_ID_DEV }}"
+          if [[ -z "$PROJECT_ID" ]]; then
+            echo "❌ vars.GCP_PROJECT_ID_DEV is empty"
+            exit 1
+          fi
 
+          echo "PROJECT_ID=$PROJECT_ID"
+          echo "CLOUDSDK_CORE_PROJECT=$PROJECT_ID" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_PROJECT=$PROJECT_ID"  >> "$GITHUB_ENV"
+          echo "GOOGLE_PROJECT=$PROJECT_ID"        >> "$GITHUB_ENV"
+          echo "GCP_PROJECT=$PROJECT_ID"           >> "$GITHUB_ENV"
       # 3) Verify identity + tokeninfo (debug but should not break the job)
       - name: Verify identity (debug)
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+
           echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-<empty>}"
           echo "== gcloud version =="
-          gcloud version
+          gcloud version || true
+
           echo "== gcloud config (after forcing project env) =="
-          gcloud config list
+          gcloud config list || true
+
           echo "== gcloud auth list =="
-          gcloud auth list
+          gcloud auth list || true
 
           echo "== access token + tokeninfo (best effort) =="
-          if TOKEN="$(gcloud auth print-access-token 2>/tmp/token_err.txt)"; then
+          TOKEN="$(gcloud auth print-access-token 2>/tmp/token_err.txt || true)"
+          if [[ -n "${TOKEN}" ]]; then
             curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${TOKEN}" \
               | jq -r '.email,.aud,.azp' || true
           else
-            echo "⚠️ gcloud auth print-access-token failed (debug only)."
+            echo "⚠️ No token (debug only)"
             cat /tmp/token_err.txt || true
           fi
 
           echo "== project describe (permission check) =="
-          gcloud projects describe "${{ vars.GCP_PROJECT_ID_DEV }}" >/dev/null && echo "OK: can read project"
-
+          gcloud projects describe "${{ vars.GCP_PROJECT_ID_DEV }}" >/dev/null && echo "OK: can read project" || true
       # 4) Impersonation test (debug only - do NOT fail the job here)
       # NOTE: In CI with google-github-actions/auth, you typically DO NOT need
       # --impersonate-service-account; the action already minted creds for that SA.
@@ -187,6 +197,16 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=terraform/foundation validate
+          
+
+      - name: Sanity check repo tree (debug)
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwd
+          ls -la
+          echo "== terraform tree =="
+          find terraform -maxdepth 2 -type f -name "*.tf" -print | head -n 50
 
       - name: Terraform plan (foundation/dev)
         shell: bash
@@ -229,6 +249,16 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=terraform/lakehouse validate
+          
+
+      - name: Sanity check repo tree (debug)
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwd
+          ls -la
+          echo "== terraform tree =="
+          find terraform -maxdepth 2 -type f -name "*.tf" -print | head -n 50
 
       - name: Terraform plan (lakehouse/dev)
         shell: bash
