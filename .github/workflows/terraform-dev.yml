@@ -2,7 +2,7 @@ name: Terraform-dev
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
       - "terraform/**"
       - ".github/workflows/terraform-dev.yml"
@@ -55,13 +55,22 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      # 2) gcloud setup (debug)
+      # 2) gcloud setup
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ vars.GCP_PROJECT_ID_DEV }}
 
-      # 3) Verify identity + tokeninfo
+      # 2bis) Force project context everywhere (avoid "lakehouse-dev" confusion)
+      - name: Force project env
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CLOUDSDK_CORE_PROJECT=${{ vars.GCP_PROJECT_ID_DEV }}" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_PROJECT=${{ vars.GCP_PROJECT_ID_DEV }}" >> "$GITHUB_ENV"
+          echo "GCP_PROJECT=${{ vars.GCP_PROJECT_ID_DEV }}" >> "$GITHUB_ENV"
+
+      # 3) Verify identity + tokeninfo (debug but should not break the job)
       - name: Verify identity (debug)
         shell: bash
         run: |
@@ -69,31 +78,41 @@ jobs:
           echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-<empty>}"
           echo "== gcloud version =="
           gcloud version
-          echo "== gcloud config =="
+          echo "== gcloud config (after forcing project env) =="
           gcloud config list
           echo "== gcloud auth list =="
           gcloud auth list
 
-          echo "== tokeninfo (email/aud/azp) =="
-          ACCESS_TOKEN="$(gcloud auth print-access-token)"
-          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" \
-            | jq -r '.email,.aud,.azp' || true
+          echo "== access token + tokeninfo (best effort) =="
+          if TOKEN="$(gcloud auth print-access-token 2>/tmp/token_err.txt)"; then
+            curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${TOKEN}" \
+              | jq -r '.email,.aud,.azp' || true
+          else
+            echo "⚠️ gcloud auth print-access-token failed (debug only)."
+            cat /tmp/token_err.txt || true
+          fi
 
           echo "== project describe (permission check) =="
-          gcloud projects describe "${{ vars.GCP_PROJECT_ID_DEV }}" >/dev/null
-          echo "OK: can read project"
+          gcloud projects describe "${{ vars.GCP_PROJECT_ID_DEV }}" >/dev/null && echo "OK: can read project"
 
-      # 4) Impersonation test (should work in CI via WIF)
+      # 4) Impersonation test (debug only - do NOT fail the job here)
+      # NOTE: In CI with google-github-actions/auth, you typically DO NOT need
+      # --impersonate-service-account; the action already minted creds for that SA.
       - name: Impersonation test (debug)
         shell: bash
         run: |
           set -euo pipefail
           SA="${{ secrets.GCP_WIF_SA_DEV }}"
-          echo "Trying to impersonate: ${SA}"
-          gcloud auth print-access-token --impersonate-service-account="${SA}" >/dev/null
-          echo "OK: can impersonate SA"
+          echo "Trying impersonation (best effort): ${SA}"
+          gcloud auth print-access-token --impersonate-service-account="${SA}" >/dev/null 2>/tmp/imp_err.txt || true
+          if [ -s /tmp/imp_err.txt ]; then
+            echo "⚠️ Impersonation failed (debug only):"
+            cat /tmp/imp_err.txt || true
+          else
+            echo "OK: impersonation worked"
+          fi
 
-      # 5) Quick API permission probes (fail fast if missing)
+      # 5) Quick API permission probes (mostly fail fast, except dataplex/dataform may be empty)
       - name: API probes (BigQuery / Secret Manager / Dataplex / Dataform)
         shell: bash
         run: |
@@ -102,19 +121,30 @@ jobs:
 
           echo "== Secret Manager probe =="
           gcloud secrets list --project "${PROJECT}" --limit=5 >/dev/null
+          echo "OK: secrets list"
 
           echo "== BigQuery probe =="
           bq --project_id="${PROJECT}" ls >/dev/null
+          echo "OK: bq ls"
 
-          echo "== Dataplex probe =="
-          gcloud dataplex lakes list --project "${PROJECT}" --location="europe-west1" --limit=5 >/dev/null || true
-          # (dataplex CLI existe; si pas de lakes ça passe)
+          echo "== Dataplex probe (best effort) =="
+          gcloud dataplex lakes list --project "${PROJECT}" --location="europe-west1" --limit=5 >/dev/null 2>/tmp/dp_err.txt || true
+          if [ -s /tmp/dp_err.txt ]; then
+            echo "⚠️ Dataplex probe warning (ignored):"
+            cat /tmp/dp_err.txt || true
+          else
+            echo "OK: dataplex lakes list"
+          fi
 
-          echo "== Dataform API probe (REST) =="
-          TOKEN="$(gcloud auth print-access-token)"
-          curl -s -H "Authorization: Bearer ${TOKEN}" \
-            "https://dataform.googleapis.com/v1beta1/projects/${PROJECT}/locations/europe-west1/repositories?pageSize=5" \
-            | jq -r '.repositories[].name' || true
+          echo "== Dataform API probe (best effort) =="
+          TOKEN="$(gcloud auth print-access-token 2>/dev/null || true)"
+          if [ -n "${TOKEN}" ]; then
+            curl -s -H "Authorization: Bearer ${TOKEN}" \
+              "https://dataform.googleapis.com/v1beta1/projects/${PROJECT}/locations/europe-west1/repositories?pageSize=5" \
+              | jq -r '.repositories[].name' || true
+          else
+            echo "⚠️ No token available for Dataform probe (ignored)."
+          fi
 
       # 6) Backend sanity checks (bucket + state objects)
       - name: Backend sanity (GCS state)
@@ -123,7 +153,7 @@ jobs:
           set -euo pipefail
           BUCKET="${{ vars.TF_STATE_BUCKET_DEV }}"
           echo "== bucket ls =="
-          gcloud storage ls "gs://${BUCKET}/" >/dev/null
+          gcloud storage ls "gs://${BUCKET}/" >/dev/null && echo "OK: bucket reachable"
 
           echo "== state objects (foundation/dev, lakehouse/dev) =="
           gcloud storage ls "gs://${BUCKET}/foundation/dev/" --recursive || true
@@ -160,18 +190,22 @@ jobs:
 
       - name: Terraform plan (foundation/dev)
         shell: bash
+        env:
+          CLOUDSDK_CORE_PROJECT: ${{ vars.GCP_PROJECT_ID_DEV }}
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID_DEV }}
         run: |
           set -euo pipefail
           terraform -chdir=terraform/foundation plan \
             -compact-warnings \
             -var-file=envs/dev/terraform.tfvars
 
-      - name: 'Debug: foundation state list (on failure)'
+      - name: Debug foundation (on failure)
         if: failure()
         shell: bash
         run: |
           terraform -chdir=terraform/foundation state list || true
           terraform -chdir=terraform/foundation providers || true
+          terraform -chdir=terraform/foundation output || true
 
       # =========================
       # LAKEHOUSE ROOT
@@ -198,15 +232,19 @@ jobs:
 
       - name: Terraform plan (lakehouse/dev)
         shell: bash
+        env:
+          CLOUDSDK_CORE_PROJECT: ${{ vars.GCP_PROJECT_ID_DEV }}
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID_DEV }}
         run: |
           set -euo pipefail
           terraform -chdir=terraform/lakehouse plan \
             -compact-warnings \
             -var-file=envs/dev/terraform.tfvars
 
-      - name: 'Debug: lakehouse state list (on failure)'
+      - name: Debug lakehouse (on failure)
         if: failure()
         shell: bash
         run: |
           terraform -chdir=terraform/lakehouse state list || true
           terraform -chdir=terraform/lakehouse providers || true
+          terraform -chdir=terraform/lakehouse output || true
