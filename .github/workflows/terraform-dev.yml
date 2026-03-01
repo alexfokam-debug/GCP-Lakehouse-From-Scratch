@@ -267,9 +267,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/foundation init -reconfigure \
-            -backend-config="bucket=${TF_BUCKET}" \
-            -backend-config="prefix=foundation/dev"
+          terraform -chdir=terraform/foundation init -reconfigure -lockfile=readonly \
+          -backend-config="bucket=${TF_BUCKET}" \
+          -backend-config="prefix=foundation/dev"
 
       - name: Terraform validate (foundation)
         shell: bash
@@ -293,9 +293,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/lakehouse init -reconfigure \
-            -backend-config="bucket=${TF_BUCKET}" \
-            -backend-config="prefix=lakehouse/dev"
+          terraform -chdir=terraform/foundation init -reconfigure -lockfile=readonly \
+          -backend-config="bucket=${TF_BUCKET}" \
+          -backend-config="prefix=foundation/dev"
 
       - name: Terraform validate (lakehouse)
         shell: bash
