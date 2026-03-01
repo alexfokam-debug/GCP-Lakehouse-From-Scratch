@@ -20,6 +20,9 @@ jobs:
   terraform-plan-dev:
     environment: dev
     runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID_DEV }}
+      TF_STATE_BUCKET_DEV: ${{ vars.TF_STATE_BUCKET_DEV }}
 
     steps:
       - name: Checkout
