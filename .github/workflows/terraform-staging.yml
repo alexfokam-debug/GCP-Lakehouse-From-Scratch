@@ -1,20 +1,36 @@
+<<<<<<< HEAD
 name: Terraform STAGING - plan
+=======
+name: Terraform STAGING
+>>>>>>> f2b7444 (test: trigger plan)
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/**"
   workflow_dispatch:
+    inputs:
+      action:
+        description: "plan ou apply"
+        required: true
+        default: "plan"
+        type: choice
+        options: [plan, apply]
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
-  terraform-plan-staging:
-    environment: staging
-    runs-on: ubuntu-latest
+  plan:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    uses: ./.github/workflows/terraform-reusable.yml
+    with:
+      environment: staging
+      action: plan
 
+<<<<<<< HEAD
     defaults:
       run:
         working-directory: terraform
@@ -132,3 +148,11 @@ jobs:
             echo ""
             echo "> If you still see 'has moved to ...[0]' in the plan, add moved blocks in terraform/modules/iam/moved.tf."
           } >> "$GITHUB_STEP_SUMMARY"
+=======
+  manual:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    uses: ./.github/workflows/terraform-reusable.yml
+    with:
+      environment: staging
+      action: ${{ inputs.action }}
+>>>>>>> f2b7444 (test: trigger plan)

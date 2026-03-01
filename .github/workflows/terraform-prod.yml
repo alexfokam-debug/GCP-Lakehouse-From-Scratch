@@ -1,0 +1,22 @@
+name: Terraform PROD
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "plan ou apply"
+        required: true
+        default: "plan"
+        type: choice
+        options: [plan, apply]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  manual:
+    uses: ./.github/workflows/terraform-reusable.yml
+    with:
+      environment: prod
+      action: ${{ inputs.action }}
