@@ -30,34 +30,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           echo "event_name=${GITHUB_EVENT_NAME}"
           echo "ref=${GITHUB_REF}"
           echo "actor=${GITHUB_ACTOR}"
           echo "repo=${GITHUB_REPOSITORY}"
 
-          # Vars
-          : "$PROJECT_ID"
-          : "$TF_BUCKET"
-          echo "Vars OK"
+          : "${{ vars.GCP_PROJECT_ID_DEV }}"
+          : "${{ vars.TF_STATE_BUCKET_DEV }}"
 
-          # Secrets
-          : "${{ secrets.GCP_WIF_PROVIDER_DEV }}"
-          : "${{ secrets.GCP_WIF_SA_DEV }}"
-          echo "Secrets OK (masked)"
+          echo "Vars OK"
         
       - name: Normalize DEV vars
         shell: bash
         run: |
           set -euo pipefail
 
-          PROJECT_ID="$(printf '%s' "$PROJECT_ID" | tr -d '\r\n' | xargs)"
-          TF_BUCKET="$(printf '%s' "$TF_BUCKET" | tr -d '\r\n' | xargs)"
+          PROJECT_ID="$(printf '%s' "${{ vars.GCP_PROJECT_ID_DEV }}" | tr -d '\r\n' | xargs)"
+          TF_BUCKET="$(printf '%s' "${{ vars.TF_STATE_BUCKET_DEV }}" | tr -d '\r\n' | xargs)"
 
           echo "PROJECT_ID=${PROJECT_ID}" >> "$GITHUB_ENV"
-          echo "TF_BUCKET=${TF_BUCKET}" >> "$GITHUB_ENV"
-
-          echo "PROJECT_ID=[${PROJECT_ID}]"
-          echo "TF_BUCKET=[${TF_BUCKET}]"    
+          echo "TF_BUCKET=${TF_BUCKET}" >> "$GITHUB_ENV"  
               
         
 
