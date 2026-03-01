@@ -241,3 +241,8 @@ variable "manage_wif" {
   description = "Whether Terraform should manage GitHub Workload Identity Federation resources."
   default     = true
 }
+variable "enable_github_cicd_wif_pool_admin" {
+  description = "Si true, donne au SA GitHub CI/CD le rôle workloadIdentityPoolAdmin (désactivé en safe mode)."
+  type        = bool
+  default     = false
+}

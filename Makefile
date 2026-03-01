@@ -1,113 +1,152 @@
 # ============================================================
 # Makefile - GCP Lakehouse From Scratch (Enterprise)
 # ============================================================
-# - Makefile = orchestrateur (UX dev)
-# - Python/Terraform = logique & infra
+# Rôle :
+# - Orchestrer l'expérience dev (UX) : terraform + scripts Python + Dataform
+# - Respecter la séparation "foundation" vs "lakehouse"
+# - Zéro ambiguïté : chaque target pointe vers le bon dossier Terraform
 # ============================================================
 
-
 # -----------------------------------------------------------------------------
-# ROOT_DIR (robuste "enterprise")
+# (0) ROOT_DIR (robuste)
 # -----------------------------------------------------------------------------
-# MAKEFILE_LIST contient le chemin du Makefile en cours.
-# On prend son dossier => racine stable du repo.
-# Ça marche même si tu exécutes `make` depuis un sous-dossier.
-# ROOT_DIR = racine du repo (sans slash final)
-# -> évite les chemins en // et rend l’output plus clean
+# MAKEFILE_LIST contient la liste des Makefiles inclus.
+# lastword(...) -> le Makefile courant
+# abspath(...)  -> chemin absolu
+# dir(...)      -> dossier contenant le Makefile
+# patsubst ...  -> enlève le / final (plus clean)
+#
+# Résultat :
+# ROOT_DIR = racine du repo, stable même si tu lances `make` depuis un sous-dossier
 ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
 # -----------------------------------------------------------------------------
-# ENV (dev/staging/prod)
+# (1) ENV (dev/staging/prod)
 # -----------------------------------------------------------------------------
+# ENV par défaut (tu peux override : make <target> ENV=staging)
 ENV ?= dev
-# Mapping propre multi-projet
+
+# Garde-fou : refuse un ENV non prévu
+ifeq (,$(filter $(ENV),dev staging prod))
+$(error ENV invalid: '$(ENV)'. Use ENV=dev|staging|prod)
+endif
+
+# -----------------------------------------------------------------------------
+# (2) Project mapping (utile pour scripts / affichage)
+# -----------------------------------------------------------------------------
+# NOTE :
+# - Terraform lit project_id depuis terraform.tfvars
+# - Mais côté Makefile c'est pratique pour afficher et pour certains scripts
 ifeq ($(ENV),dev)
 PROJECT_ID := lakehouse-dev-486419
 LOCATION   := europe-west1
 endif
-
 ifeq ($(ENV),staging)
 PROJECT_ID := lakehouse-stg-486419
 LOCATION   := europe-west1
 endif
-
 ifeq ($(ENV),prod)
 PROJECT_ID := lakehouse-prd-486419
 LOCATION   := europe-west1
 endif
-# -----------------------------------------------------------------------------
-# Terraform
-# -----------------------------------------------------------------------------
-TF_DIR := $(ROOT_DIR)/terraform
-TF_VARS := $(TF_DIR)/envs/$(ENV)/terraform.tfvars
-
-# IMPORTANT (grand groupe) :
-# On évite le prompt interactif "var.env Enter a value".
-# -> On fixe TF_VAR_env en dur via Makefile.
-export TF_VAR_env := $(ENV)
 
 # -----------------------------------------------------------------------------
-# Bootstrap config
+# (3) Terraform stacks (nouvelle arborescence)
+# -----------------------------------------------------------------------------
+# TF_ROOT_DIR          -> dossier terraform/ à la racine
+# TF_FOUNDATION_DIR    -> stack "foundation"
+# TF_LAKEHOUSE_DIR     -> stack "lakehouse"
+TF_ROOT_DIR       := $(ROOT_DIR)/terraform
+TF_FOUNDATION_DIR := $(TF_ROOT_DIR)/foundation
+TF_LAKEHOUSE_DIR  := $(TF_ROOT_DIR)/lakehouse
+
+# -----------------------------------------------------------------------------
+# (4) Backend & tfvars (paths relatifs au dossier -chdir)
+# -----------------------------------------------------------------------------
+# Important :
+# - Comme on utilise `terraform -chdir=<stack>`, les fichiers backend/tfvars
+#   doivent être donnés RELATIFS à ce dossier.
+#
+# Ex :
+# terraform -chdir=terraform/foundation init -backend-config=envs/dev/backend.hcl
+TF_FOUNDATION_BACKEND := envs/$(ENV)/backend.hcl
+TF_FOUNDATION_VARS    := envs/$(ENV)/terraform.tfvars
+
+TF_LAKEHOUSE_BACKEND  := envs/$(ENV)/backend.hcl
+TF_LAKEHOUSE_VARS     := envs/$(ENV)/terraform.tfvars
+
+# -----------------------------------------------------------------------------
+# (5) TF vars export (optionnel)
+# -----------------------------------------------------------------------------
+# Si tes modules consomment TF_VAR_environment (ou scripts legacy),
+# tu peux garder cette export.
+# Sinon, ça ne gêne pas.
+export TF_VAR_environment := $(ENV)
+
+# -----------------------------------------------------------------------------
+# (6) Bootstrap config (Python)
 # -----------------------------------------------------------------------------
 BOOTSTRAP_CONFIG ?= $(ROOT_DIR)/configs/projects.yaml
 CONFIRM ?= NO
+
 # -----------------------------------------------------------------------------
-# PYTHON BIN (enterprise)
+# (7) Python interpreter (robuste)
 # -----------------------------------------------------------------------------
-# Objectif :
-#   - Toujours exécuter avec le même interpréteur
-#   - Reproductible sur n'importe quel poste / CI
-#
-# Stratégie :
-#   - Si .venv existe à la racine => on utilise .venv/bin/python
-#   - Sinon => fallback sur python3 (CI / machine sans venv)
+# - Si .venv existe à la racine, on l'utilise
+# - Sinon fallback sur python3
 PYTHON_BIN := $(ROOT_DIR)/.venv/bin/python
 ifeq (,$(wildcard $(PYTHON_BIN)))
 PYTHON_BIN := python3
 endif
 
+# -----------------------------------------------------------------------------
+# (8) Orchestration / Dataproc
+# -----------------------------------------------------------------------------
+ORCH_MODULE   := orchestration.src.lakehouse_cli.cli
+ENV_FILE      := $(ROOT_DIR)/configs/env.$(ENV).yaml
+PROFILES_FILE := $(ROOT_DIR)/configs/profiles.yaml
+ICEBERG_JOB   := $(ROOT_DIR)/jobs/iceberg_writer/create_iceberg_tables.py
+
 # =============================================================================
 # HELP
 # =============================================================================
+.PHONY: help
 help:
 	@echo ""
 	@echo "============================================================"
-	@echo " Lakehouse - Available Commands"
+	@echo " GCP Lakehouse From Scratch - Commands"
 	@echo "============================================================"
 	@echo ""
 	@echo "Bootstrap:"
 	@echo "  make bootstrap-config-template > configs/projects.yaml"
 	@echo "  make bootstrap-projects CONFIRM=YES"
 	@echo ""
-	@echo "Terraform:"
-	@echo "  make tf-init ENV=dev"
-	@echo "  make tf-plan ENV=dev"
-	@echo "  make tf-apply ENV=dev"
+	@echo "Terraform - FOUNDATION:"
+	@echo "  make tf-foundation-init ENV=dev"
+	@echo "  make tf-foundation-plan ENV=dev"
+	@echo "  make tf-foundation-apply ENV=dev"
+	@echo ""
+	@echo "Terraform - LAKEHOUSE:"
+	@echo "  make tf-lakehouse-init ENV=dev"
+	@echo "  make tf-lakehouse-plan ENV=dev"
+	@echo "  make tf-lakehouse-apply ENV=dev"
+	@echo ""
+	@echo "Dataform:"
+	@echo "  make dataform-run ENV=dev"
 	@echo ""
 	@echo "Dataproc:"
 	@echo "  make iceberg ENV=dev"
 	@echo ""
+	@echo "Dev tools:"
+	@echo "  make venv"
+	@echo "  make doctor"
 	@echo "============================================================"
 	@echo ""
 
 # =============================================================================
-# BOOTSTRAP (Python) — Enterprise
+# BOOTSTRAP (Python)
 # =============================================================================
-
 .PHONY: bootstrap-projects bootstrap-config-template bootstrap-doctor
-
-# ROOT_DIR stable (exécutable depuis n'importe quel dossier)
-ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-
-# Fichier de config YAML (source-of-truth)
-BOOTSTRAP_CONFIG ?= $(ROOT_DIR)/configs/projects.yaml
-CONFIRM ?= NO
-
-# Python venv du repo (si présent), sinon python3
-PYTHON_BIN := $(ROOT_DIR)/.venv/bin/python
-ifeq (,$(wildcard $(PYTHON_BIN)))
-PYTHON_BIN := python3
-endif
 
 bootstrap-config-template:
 	@echo "# ============================================================================="
@@ -151,113 +190,111 @@ bootstrap-doctor:
 	@gcloud config get-value core/account || true
 	@echo "== visible billing accounts =="
 	@gcloud billing accounts list --format="table(name,displayName,open)" || true
-# =========================
-# Terraform (safe multi-env)
-# =========================
-# Usage:
-#   make tf-init ENV=staging
-#   make tf-plan ENV=staging
-#   make tf-apply ENV=staging
-#   make tf-destroy ENV=staging
-#
-# Important:
-# - ENV doit être dev|staging|prod
-# - On force le backend via terraform/envs/<ENV>/backend.hcl
-# - On force les variables via terraform/envs/<ENV>/terraform.tfvars
-# - On exécute terraform dans le dossier terraform/ via -chdir (propre)
-#
-ENV ?= staging
-TF_DIR := terraform
-TF_BACKEND := envs/$(ENV)/backend.hcl
-TF_VARS := envs/$(ENV)/terraform.tfvars
-
-# Petit garde-fou : refuse un ENV non prévu
-ifeq (,$(filter $(ENV),dev staging prod))
-$(error ENV invalid: '$(ENV)'. Use ENV=dev|staging|prod)
-endif
-
-.PHONY: tf-init tf-plan tf-apply tf-destroy tf-refresh tf-state-list
-
-tf-init:
-	@echo "==> Terraform INIT for ENV=$(ENV)"
-	@echo "    - Backend: $(TF_DIR)/$(TF_BACKEND)"
-	@echo "    - Vars:    $(TF_DIR)/$(TF_VARS)"
-	# -reconfigure : utile si tu as déjà initialisé avec un autre backend
-	terraform -chdir=$(TF_DIR) init -reconfigure -backend-config=$(TF_BACKEND)
-
-tf-plan: tf-init
-	@echo "==> Terraform PLAN for ENV=$(ENV)"
-	terraform -chdir=$(TF_DIR) plan -var-file=$(TF_VARS)
-
-.PHONY: tf-guard
-
-tf-guard:
-	@echo "==> Guard check for ENV=$(ENV)"
-	@echo "    Ensuring backend file exists..."
-	@test -f "$(TF_DIR)/$(TF_BACKEND)" || (echo "Missing backend: $(TF_DIR)/$(TF_BACKEND)" && exit 1)
-	@echo "    Ensuring vars file exists..."
-	@test -f "$(TF_DIR)/$(TF_VARS)" || (echo "Missing vars: $(TF_DIR)/$(TF_VARS)" && exit 1)
-
-tf-apply: tf-init tf-guard
-	@echo "==> Terraform APPLY for ENV=$(ENV)"
-	terraform -chdir=$(TF_DIR) apply -var-file=$(TF_VARS)
-
-tf-destroy: tf-init
-	@echo "==> Terraform DESTROY for ENV=$(ENV)"
-	# Attention: destroy détruit VRAIMENT l'environnement ciblé
-	terraform -chdir=$(TF_DIR) destroy -var-file=$(TF_VARS)
-
-tf-refresh: tf-init
-	@echo "==> Terraform REFRESH for ENV=$(ENV)"
-	terraform -chdir=$(TF_DIR) refresh -var-file=$(TF_VARS)
-
-tf-state-list: tf-init
-	@echo "==> Terraform STATE LIST for ENV=$(ENV)"
-	terraform -chdir=$(TF_DIR) state list
-# -----------------------------------------------------------------------------
-# Orchestration / Dataproc (PySpark)
-# -----------------------------------------------------------------------------
-ORCH_MODULE := orchestration.src.lakehouse_cli.cli
-ENV_FILE := $(ROOT_DIR)/configs/env.$(ENV).yaml
-PROFILES_FILE := $(ROOT_DIR)/configs/profiles.yaml
-ICEBERG_JOB := $(ROOT_DIR)/jobs/iceberg_writer/create_iceberg_tables.py
-
-iceberg:
-	@echo "Submitting Iceberg job to Dataproc (ENV=$(ENV))..."
-	@$(PYTHON_BIN) -m $(ORCH_MODULE) dataproc-iceberg \
-	  --local-job $(ICEBERG_JOB) \
-	  --env-file $(ENV_FILE) \
-	  --profiles-file $(PROFILES_FILE) \
-	  --profile dev_small
-
 
 # =============================================================================
-# GUARD RAILS (enterprise)
+# Terraform helpers (guards)
 # =============================================================================
-# Macro: check-file
-# Usage: $(call check-file,<path>,<message>)
-define check-file
-	@if [ ! -f "$(1)" ]; then \
-		echo "❌ Missing file: $(1)"; \
-		echo "   $(2)"; \
-		exit 1; \
-	fi
+# Macro tf_guard :
+# - Vérifie que backend.hcl et terraform.tfvars existent
+# - Empêche les erreurs floues "file not found" plus tard
+#
+# Usage :
+#   $(call tf_guard,<stack_dir>,<backend_rel>,<tfvars_rel>)
+define tf_guard
+	@test -f "$(1)/$(2)" || (echo "❌ Missing backend file: $(1)/$(2)" && exit 1)
+	@test -f "$(1)/$(3)" || (echo "❌ Missing tfvars file:  $(1)/$(3)" && exit 1)
 endef
 
 # =============================================================================
-# DEV TOOLING (Enterprise)
+# Terraform — FOUNDATION stack
 # =============================================================================
+.PHONY: tf-foundation-validate tf-foundation-init tf-foundation-plan tf-foundation-apply tf-foundation-destroy
 
+tf-foundation-validate:
+	@echo "==> Terraform VALIDATE (FOUNDATION) ENV=$(ENV)"
+	# validate ne touche pas le backend, mais nécessite souvent les providers
+	terraform -chdir="$(TF_FOUNDATION_DIR)" validate
+
+tf-foundation-init:
+	@echo "==> Terraform INIT (FOUNDATION) ENV=$(ENV)"
+	# (1) Guard : fichiers présents
+	@$(call tf_guard,$(TF_FOUNDATION_DIR),$(TF_FOUNDATION_BACKEND),$(TF_FOUNDATION_VARS))
+	# (2) Init dans LE BON DOSSIER (foundation)
+	terraform -chdir="$(TF_FOUNDATION_DIR)" init -reconfigure \
+  	-backend-config="envs/$(ENV)/backend.hcl"
+
+tf-foundation-plan: tf-foundation-init
+	@echo "==> Terraform PLAN (FOUNDATION) ENV=$(ENV)"
+	terraform -chdir="$(TF_FOUNDATION_DIR)" plan \
+	  -var-file="$(TF_FOUNDATION_VARS)"
+
+tf-foundation-apply: tf-foundation-init
+	@echo "==> Terraform APPLY (FOUNDATION) ENV=$(ENV)"
+	terraform -chdir="$(TF_FOUNDATION_DIR)" apply \
+	  -var-file="$(TF_FOUNDATION_VARS)"
+
+tf-foundation-destroy: tf-foundation-init
+	@echo "==> Terraform DESTROY (FOUNDATION) ENV=$(ENV)"
+	terraform -chdir="$(TF_FOUNDATION_DIR)" destroy \
+	  -var-file="$(TF_FOUNDATION_VARS)"
+
+# =============================================================================
+# Terraform — LAKEHOUSE stack
+# =============================================================================
+.PHONY: tf-lakehouse-validate tf-lakehouse-init tf-lakehouse-plan tf-lakehouse-apply tf-lakehouse-destroy
+
+tf-lakehouse-validate:
+	@echo "==> Terraform VALIDATE (LAKEHOUSE) ENV=$(ENV)"
+	terraform -chdir="$(TF_LAKEHOUSE_DIR)" validate
+
+tf-lakehouse-init:
+	@echo "==> Terraform INIT (LAKEHOUSE) ENV=$(ENV)"
+	@$(call tf_guard,$(TF_LAKEHOUSE_DIR),$(TF_LAKEHOUSE_BACKEND),$(TF_LAKEHOUSE_VARS))
+	terraform -chdir="$(TF_LAKEHOUSE_DIR)" init -reconfigure \
+	  -backend-config="$(TF_LAKEHOUSE_BACKEND)"
+
+tf-lakehouse-plan: tf-lakehouse-init
+	@echo "==> Terraform PLAN (LAKEHOUSE) ENV=$(ENV)"
+	terraform -chdir="$(TF_LAKEHOUSE_DIR)" plan \
+	  -var-file="$(TF_LAKEHOUSE_VARS)"
+
+tf-lakehouse-apply: tf-lakehouse-init
+	@echo "==> Terraform APPLY (LAKEHOUSE) ENV=$(ENV)"
+	terraform -chdir="$(TF_LAKEHOUSE_DIR)" apply \
+	  -var-file="$(TF_LAKEHOUSE_VARS)"
+
+tf-lakehouse-destroy: tf-lakehouse-init
+	@echo "==> Terraform DESTROY (LAKEHOUSE) ENV=$(ENV)"
+	terraform -chdir="$(TF_LAKEHOUSE_DIR)" destroy \
+	  -var-file="$(TF_LAKEHOUSE_VARS)"
+
+# =============================================================================
+# Dataproc (Iceberg writer)
+# =============================================================================
+.PHONY: iceberg
+iceberg:
+	@echo "Submitting Iceberg job to Dataproc (ENV=$(ENV))..."
+	@$(PYTHON_BIN) -m $(ORCH_MODULE) dataproc-iceberg \
+	  --local-job "$(ICEBERG_JOB)" \
+	  --env-file "$(ENV_FILE)" \
+	  --profiles-file "$(PROFILES_FILE)" \
+	  --profile dev_small
+
+# =============================================================================
+# DEV TOOLING
+# =============================================================================
 .PHONY: venv doctor
 
-# Installe les deps du repo dans le venv du repo (pas ailleurs)
 venv:
 	@echo "Bootstrapping python environment (repo venv)..."
 	@$(PYTHON_BIN) $(ROOT_DIR)/scripts/bootstrap_venv.py
 
-# Check rapide: gcloud + python + terraform
 doctor:
 	@echo "== Repo doctor checks =="
+	@echo "ENV=$(ENV)"
+	@echo "PROJECT_ID=$(PROJECT_ID)"
+	@echo "LOCATION=$(LOCATION)"
+	@echo ""
 	@echo "Python:"
 	@$(PYTHON_BIN) -c "import sys; print(sys.executable)"
 	@echo ""
@@ -270,53 +307,27 @@ doctor:
 	@echo "terraform:"
 	@command -v terraform >/dev/null 2>&1 && terraform version | head -n 1 || echo "❌ terraform not found"
 
-
-# ==========================================
-# Dataform orchestration (Python) — ENTERPRISE (dev/prod safe)
-# ==========================================
-# Objectif:
-#   - ENV=dev  -> exécute wf-dev-on-demand (tags=["dev"])
-#   - ENV=prod -> exécute wf-prod-weekdays (tags=["prod"])
-#   - Possibilité de forcer un workflow: WORKFLOW=wf-xxxx
-#
-# Pourquoi ?
-#   - Empêche d’exécuter "prod" par erreur quand tu penses être en dev
-#   - Permet un usage CI/CD simple et reproductible
-#
-# Usage:
-#   make dataform-run ENV=dev
-#   make dataform-run ENV=prod
-#   make dataform-run ENV=dev WORKFLOW=wf-prod-weekdays   # (si tu veux forcer)
-# ------------------------------------------
-
+# =============================================================================
+# Dataform orchestration (Python) — safe mapping
+# =============================================================================
 .PHONY: dataform-run dataform-run-dev dataform-run-prod \
         bq-test-curated upload-sample bq-fix-dataset-access bq-test e2e
 
-# ---- Workflow "par défaut" selon ENV (safe mapping) ----
-# Note: := évalue immédiatement, donc stable.
+# Workflow par défaut : mapping SAFE selon ENV
 ifeq ($(ENV),dev)
 DATAFORM_WORKFLOW_DEFAULT := wf-dev-on-demand
 endif
-
 ifeq ($(ENV),staging)
-# Tu peux soit réutiliser le dev-on-demand, soit créer un wf-staging
-# Pour l'instant on pointe sur dev-on-demand pour éviter le prod.
 DATAFORM_WORKFLOW_DEFAULT := wf-dev-on-demand
 endif
-
 ifeq ($(ENV),prod)
 DATAFORM_WORKFLOW_DEFAULT := wf-prod-weekdays
 endif
 
-# ---- Workflow réellement utilisé ----
-# Si WORKFLOW est fourni, il écrase la valeur par défaut.
+# Workflow réellement utilisé :
+# - si WORKFLOW=xxx est fourni, il écrase le default
 WORKFLOW ?= $(DATAFORM_WORKFLOW_DEFAULT)
 
-# ---- Dataform runner (ENV-aware) ----
-# On passe:
-#   --env      : pour charger la conf env côté python
-#   --workflow : pour choisir wf-dev-on-demand vs wf-prod-weekdays
-#   --timeout / --poll : contrôle d’exécution
 dataform-run:
 	@echo "==> Dataform RUN"
 	@echo "    ENV=$(ENV)"
@@ -327,15 +338,12 @@ dataform-run:
 	  --timeout-sec 1800 \
 	  --poll-sec 10
 
-# Raccourcis explicites (plus lisibles)
 dataform-run-dev:
 	@$(MAKE) dataform-run ENV=dev
 
 dataform-run-prod:
 	@$(MAKE) dataform-run ENV=prod
 
-# ---- Tests BigQuery (curated) ----
-# Un seul target "bq-test-curated" (tu l'avais 2 fois -> warnings)
 bq-test-curated:
 	@echo "==> BQ test curated table (ENV=$(ENV))"
 	@$(PYTHON_BIN) -m scripts.test_bigquery_curated_table_env \
@@ -356,8 +364,9 @@ bq-test:
 	@echo "==> BQ test external table (ENV=$(ENV))"
 	@$(PYTHON_BIN) -m scripts.test_bigquery_external_table_env --env $(ENV) --table sample_ext --limit 5
 
-# ---- End-to-end ----
-# Exemple: exécute Dataform puis vérifie une table curated
+# End-to-end :
+# - exécute Dataform
+# - puis vérifie une table curated
 e2e:
 	@$(MAKE) dataform-run ENV=$(ENV)
 	@$(MAKE) bq-test-curated ENV=$(ENV)

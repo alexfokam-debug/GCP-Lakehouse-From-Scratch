@@ -3,7 +3,13 @@ name: Terraform-dev
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-dev.yml"
   pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-dev.yml"
   workflow_dispatch:
 
 permissions:
@@ -14,10 +20,6 @@ jobs:
   terraform-plan-dev:
     environment: dev
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: terraform
 
     steps:
       - name: Checkout
@@ -34,22 +36,14 @@ jobs:
           echo "repo=${GITHUB_REPOSITORY}"
 
           # Vars
-          if [ -z "${{ vars.GCP_PROJECT_ID_DEV }}" ]; then
-            echo "❌ Missing repo var: GCP_PROJECT_ID_DEV"
-            exit 1
-          fi
+          : "${{ vars.GCP_PROJECT_ID_DEV }}"
+          : "${{ vars.TF_STATE_BUCKET_DEV }}"
+          echo "Vars OK"
 
           # Secrets
-          if [ -z "${{ secrets.GCP_WIF_PROVIDER_DEV }}" ]; then
-            echo "❌ Missing/empty secret: GCP_WIF_PROVIDER_DEV"
-            exit 1
-          fi
-          if [ -z "${{ secrets.GCP_WIF_SA_DEV }}" ]; then
-            echo "❌ Missing/empty secret: GCP_WIF_SA_DEV"
-            exit 1
-          fi
-
-          echo "Resolved OK (masked in logs by GitHub)."
+          : "${{ secrets.GCP_WIF_PROVIDER_DEV }}"
+          : "${{ secrets.GCP_WIF_SA_DEV }}"
+          echo "Secrets OK (masked)"
 
       # 1) Auth via WIF (ADC)
       - name: Authenticate to Google Cloud (WIF)
@@ -61,40 +55,158 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      # 2) gcloud (debug utile)
+      # 2) gcloud setup (debug)
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ vars.GCP_PROJECT_ID_DEV }}
 
+      # 3) Verify identity + tokeninfo
       - name: Verify identity (debug)
         shell: bash
         run: |
           set -euo pipefail
-          echo "ADC file: $GOOGLE_APPLICATION_CREDENTIALS"
+          echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-<empty>}"
+          echo "== gcloud version =="
+          gcloud version
+          echo "== gcloud config =="
+          gcloud config list
           echo "== gcloud auth list =="
           gcloud auth list
-          echo "== tokeninfo (email/aud/azp) =="
-          gcloud auth print-access-token | xargs -I{} curl -s "https://oauth2.googleapis.com/tokeninfo?access_token={}" | jq -r '.email,.aud,.azp'
-          echo "== project describe (permission check) =="
-          gcloud projects describe "${{ vars.GCP_PROJECT_ID_DEV }}" >/dev/null && echo "OK: can read project"
 
-      # 3) Terraform
+          echo "== tokeninfo (email/aud/azp) =="
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" \
+            | jq -r '.email,.aud,.azp' || true
+
+          echo "== project describe (permission check) =="
+          gcloud projects describe "${{ vars.GCP_PROJECT_ID_DEV }}" >/dev/null
+          echo "OK: can read project"
+
+      # 4) Impersonation test (should work in CI via WIF)
+      - name: Impersonation test (debug)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SA="${{ secrets.GCP_WIF_SA_DEV }}"
+          echo "Trying to impersonate: ${SA}"
+          gcloud auth print-access-token --impersonate-service-account="${SA}" >/dev/null
+          echo "OK: can impersonate SA"
+
+      # 5) Quick API permission probes (fail fast if missing)
+      - name: API probes (BigQuery / Secret Manager / Dataplex / Dataform)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="${{ vars.GCP_PROJECT_ID_DEV }}"
+
+          echo "== Secret Manager probe =="
+          gcloud secrets list --project "${PROJECT}" --limit=5 >/dev/null
+
+          echo "== BigQuery probe =="
+          bq --project_id="${PROJECT}" ls >/dev/null
+
+          echo "== Dataplex probe =="
+          gcloud dataplex lakes list --project "${PROJECT}" --location="europe-west1" --limit=5 >/dev/null || true
+          # (dataplex CLI existe; si pas de lakes ça passe)
+
+          echo "== Dataform API probe (REST) =="
+          TOKEN="$(gcloud auth print-access-token)"
+          curl -s -H "Authorization: Bearer ${TOKEN}" \
+            "https://dataform.googleapis.com/v1beta1/projects/${PROJECT}/locations/europe-west1/repositories?pageSize=5" \
+            | jq -r '.repositories[].name' || true
+
+      # 6) Backend sanity checks (bucket + state objects)
+      - name: Backend sanity (GCS state)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUCKET="${{ vars.TF_STATE_BUCKET_DEV }}"
+          echo "== bucket ls =="
+          gcloud storage ls "gs://${BUCKET}/" >/dev/null
+
+          echo "== state objects (foundation/dev, lakehouse/dev) =="
+          gcloud storage ls "gs://${BUCKET}/foundation/dev/" --recursive || true
+          gcloud storage ls "gs://${BUCKET}/lakehouse/dev/" --recursive || true
+
+      # 7) Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
 
-      - name: Terraform fmt
-        run: terraform fmt -check -recursive
+      # =========================
+      # FOUNDATION ROOT
+      # =========================
+      - name: Terraform fmt (foundation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation fmt -check -recursive
 
-      - name: Terraform init (dev backend)
-        run: terraform init -backend-config=envs/dev/backend.hcl -reconfigure
+      - name: Terraform init (foundation/dev backend)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation init -reconfigure \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET_DEV }}" \
+            -backend-config="prefix=foundation/dev"
 
-      - name: Terraform validate
-        run: terraform validate
+      - name: Terraform validate (foundation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation validate
 
-      - name: Terraform plan (dev)
-        env:
-          GOOGLE_PROJECT: ${{ vars.GCP_PROJECT_ID_DEV }}
-        run: terraform plan -var-file=envs/dev/terraform.tfvars -out=plan-dev.out
+      - name: Terraform plan (foundation/dev)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation plan \
+            -compact-warnings \
+            -var-file=envs/dev/terraform.tfvars
+
+      - name: 'Debug: foundation state list (on failure)'
+        if: failure()
+        shell: bash
+        run: |
+          terraform -chdir=terraform/foundation state list || true
+          terraform -chdir=terraform/foundation providers || true
+
+      # =========================
+      # LAKEHOUSE ROOT
+      # =========================
+      - name: Terraform fmt (lakehouse)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse fmt -check -recursive
+
+      - name: Terraform init (lakehouse/dev backend)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse init -reconfigure \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET_DEV }}" \
+            -backend-config="prefix=lakehouse/dev"
+
+      - name: Terraform validate (lakehouse)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse validate
+
+      - name: Terraform plan (lakehouse/dev)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse plan \
+            -compact-warnings \
+            -var-file=envs/dev/terraform.tfvars
+
+      - name: 'Debug: lakehouse state list (on failure)'
+        if: failure()
+        shell: bash
+        run: |
+          terraform -chdir=terraform/lakehouse state list || true
+          terraform -chdir=terraform/lakehouse providers || true

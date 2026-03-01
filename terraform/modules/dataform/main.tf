@@ -1,59 +1,90 @@
 ###############################################################################
-# main.tf – Module Dataform (Enterprise-ready)
+# modules/dataform/main.tf — Module Dataform (Enterprise-ready)
 #
-# Objectif :
+# Objectifs :
 # 1) Créer le repository Dataform
-# 2) Créer une Release Config
-# 3) Créer un Workflow Config PROD (planifié)
-# 4) Créer un Workflow DEV (on-demand)
+# 2) Créer une Release Config (compilation / defaults / vars)
+# 3) Créer un Workflow PROD planifié (cron)
+# 4) Créer un Workflow DEV on-demand
 #
-# Architecture Sécurité :
-# - Le token Git est stocké dans un projet centralisé (Security Project)
-# - On ne lit PAS le secret
-# - On référence uniquement la VERSION fournie en variable
-# - Terraform ne voit jamais le token
+# Sécurité / Git :
+# - Le token Git est dans Secret Manager (central security project possible)
+# - Terraform NE LIT JAMAIS le secret
+# - On référence uniquement "projects/.../secrets/.../versions/..."
+# - Donc : aucun token en clair dans state / logs / plan
 ###############################################################################
 
 ###############################################################################
-# 1️⃣ Repository Dataform
+# 0) LOCALS — Normalisation + garde-fou Git
+#
+# Pourquoi ?
+# - éviter les null/"" qui font exploser les tests
+# - éviter la suppression accidentelle du bloc git_remote_settings
+#   quand une variable est vide / non passée
+###############################################################################
+locals {
+  # Normalisation (évite null / espaces)
+  git_repo_url_norm             = trimspace(coalesce(var.dataform_git_repo_url, ""))
+  git_token_secret_version_norm = trimspace(coalesce(var.dataform_git_token_secret_version, ""))
+
+  # Git activé seulement si enable_git + url + secret_version non vides
+  git_enabled = alltrue([
+    var.enable_git,
+    local.git_repo_url_norm != "",
+    local.git_token_secret_version_norm != "",
+  ])
+}
+
+###############################################################################
+# 1) Dataform Repository
 ###############################################################################
 resource "google_dataform_repository" "this" {
   provider = google-beta
 
-  # ---------------------------------------------------------------------------
-  # Contexte projet / région
-  # ---------------------------------------------------------------------------
+  # Projet + région Dataform
   project = var.project_id
   region  = var.region
 
-  # ---------------------------------------------------------------------------
-  # Nom du repository (ex: lakehouse-staging-dataform)
-  # ---------------------------------------------------------------------------
-  name         = var.repo_name
-  display_name = var.repo_display_name
+  # name = ID technique du repo Dataform (immutable-ish)
+  # Ex: lakehouse-dev-dataform
+  name = var.repository_name
 
-  # ---------------------------------------------------------------------------
-  # Connexion Git distante (GitHub)
-  #
-  # IMPORTANT:
-  # - On passe directement une version complète du secret
-  # - Exemple:
-  #   projects/518653594867/secrets/dataform-git-token/versions/latest
-  # ---------------------------------------------------------------------------
-  git_remote_settings {
-    url                                 = var.git_repo_url
-    default_branch                      = var.git_default_branch
-    authentication_token_secret_version = var.dataform_git_token_secret_version
-  }
+  # display_name = nom lisible dans la console
+  # Si tu ne le mets pas, Terraform peut vouloir le “supprimer” (-> null)
+  display_name = var.repo_display_name != "" ? var.repo_display_name : var.repository_name
 
-  # Labels de gouvernance
+  # Labels gouvernance / FinOps
   labels = var.labels
-}
 
+  # ---------------------------------------------------------------------------
+  # Git remote settings (OPTIONNEL)
+  # ---------------------------------------------------------------------------
+  # BUT: ce bloc ne doit exister QUE si git_enabled == true
+  # sinon => drift / suppression côté API
+  dynamic "git_remote_settings" {
+    for_each = local.git_enabled ? [1] : []
+    content {
+      # URL HTTPS du repo Git
+      url = local.git_repo_url_norm
+
+      # branche par défaut (utilise TON input enterprise)
+      default_branch = var.dataform_default_branch
+
+      # PAT Git via Secret Manager (version)
+      authentication_token_secret_version = local.git_token_secret_version_norm
+    }
+  }
+}
 ###############################################################################
-# 2️⃣ Dataform Release Config
+# 2) Release Config
 #
-# Définit comment le repo est compilé (branche + variables)
+# Décrit comment Dataform compile le code :
+# - git_commitish (branche/tag/sha)
+# - default_database / default_schema
+# - vars injectées
+#
+# NOTE :
+# - repository = google_dataform_repository.this.name (ID "projects/.../repositories/...")
 ###############################################################################
 resource "google_dataform_repository_release_config" "prod_release" {
   provider = google-beta
@@ -61,22 +92,25 @@ resource "google_dataform_repository_release_config" "prod_release" {
   project = var.project_id
   region  = var.region
 
+  # Lien vers le repo Dataform
   repository = google_dataform_repository.this.name
-  name       = "release-prod"
 
-  # Branche utilisée pour compiler
-  git_commitish = var.git_default_branch
+  # ID de la release config (stable)
+  name = "release-prod"
 
-  # Configuration de compilation
+  # Référence Git utilisée pour compiler (souvent "main")
+  # -> plutôt que var.git_default_branch en dur, on passe une variable dédiée
+  git_commitish = var.git_commitish
+
   code_compilation_config {
-
-    # Base par défaut (projet GCP)
+    # Projet BigQuery par défaut
     default_database = var.project_id
 
-    # Dataset cible analytics_{env}
-    default_schema = "analytics_${var.environment}"
+    # Dataset par défaut où Dataform écrit tables/vues
+    # ==> on prend la variable (évite les divergences env / rename)
+    default_schema = var.default_schema
 
-    # Variables injectées dans Dataform (ex: includes/constants.js)
+    # Variables Dataform (utilisable dans includes/constants.js / etc.)
     vars = {
       env = var.environment
     }
@@ -84,11 +118,14 @@ resource "google_dataform_repository_release_config" "prod_release" {
 }
 
 ###############################################################################
-# 3️⃣ Workflow PROD (planifié)
+# 3) Workflow PROD (planifié)
 #
-# - Exécution automatique
-# - Lun → Ven à 06:00
+# Objectif :
+# - Exécution automatique (lun-ven 06:00)
 # - Exécute uniquement les tags "prod"
+#
+# NOTE :
+# - On pilote cron + timezone par variables (enterprise-ready)
 ###############################################################################
 resource "google_dataform_repository_workflow_config" "prod_weekdays" {
   provider = google-beta
@@ -99,30 +136,28 @@ resource "google_dataform_repository_workflow_config" "prod_weekdays" {
 
   name = "wf-prod-weekdays"
 
+  # Très bien : on pointe sur la release config
   release_config = google_dataform_repository_release_config.prod_release.id
 
-  # CRON : 06:00 du lundi au vendredi
-  cron_schedule = "0 6 * * 1-5"
-
-  # Timezone Europe/Paris
-  time_zone = "Europe/Paris"
+  # CRON & timezone pilotés
+  cron_schedule = var.workflow_cron
+  time_zone     = var.time_zone
 
   invocation_config {
+    # Tag(s) à exécuter
     included_tags = ["prod"]
 
-    # ⚠️ DOIT être un email complet
-    # Exemple:
-    # sa-dataform-staging@lakehouse-stg-486419.iam.gserviceaccount.com
+    # Service Account runtime Dataform (email complet)
     service_account = var.dataform_sa_email
   }
 }
 
 ###############################################################################
-# 4️⃣ Workflow DEV (On-demand)
+# 4) Workflow DEV (On-demand)
 #
-# - Pas de cron
-# - Utilisé pour déclenchement manuel
-# - Exécute uniquement les tags "dev"
+# Objectif :
+# - pas de cron (déclenchement manuel)
+# - exécute uniquement les tags "dev"
 ###############################################################################
 resource "google_dataform_repository_workflow_config" "dev_on_demand" {
   provider = google-beta

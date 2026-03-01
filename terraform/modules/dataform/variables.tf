@@ -1,29 +1,26 @@
 ###############################################################################
-# modules/dataform/variables.tf
-# Objectif :
-# - Déclarer toutes les variables nécessaires au module Dataform
-# - Garder une interface claire entre ROOT et MODULE
+# modules/dataform/variables.tf — Interface unique & stable (Enterprise-ready)
+#
+# Design principles:
+# - Un seul set de variables (pas de doublons)
+# - Git remote settings piloté par enable_git + 2 inputs (url + secret_version)
+# - Terraform NE LIT JAMAIS le secret -> on référence uniquement la version
 ###############################################################################
 
 # ---------------------------------------------------------------------------
 # Contexte projet / région / environnement
 # ---------------------------------------------------------------------------
 
-# ID du projet GCP (ex: lakehouse-486419)
 variable "project_id" {
   description = "GCP project id où créer les ressources Dataform"
   type        = string
 }
 
-# Région GCP (ex: europe-west1)
-# Attention : Dataform doit être créé dans une région supportée
-# et cohérente avec BigQuery/Dataplex si tu veux une archi propre.
 variable "region" {
-  description = "Région GCP pour Dataform"
+  description = "Région GCP pour Dataform (ex: europe-west1)"
   type        = string
 }
 
-# Environnement (dev/prod)
 variable "environment" {
   description = "Environnement de déploiement (dev, prod, ...)"
   type        = string
@@ -32,43 +29,14 @@ variable "environment" {
 # ---------------------------------------------------------------------------
 # Repository Dataform
 # ---------------------------------------------------------------------------
-
-# Nom technique du repository (ID dans l'API Dataform)
-# Conseil : rester simple, lowercase, sans espaces.
-variable "repo_name" {
-  description = "Nom technique du repository Dataform (ID)"
-  type        = string
-}
-
-# Nom lisible dans la console (display_name)
-variable "repo_display_name" {
-  description = "Nom d'affichage du repository Dataform"
-  type        = string
-}
-
-# ---------------------------------------------------------------------------
-# Git remote settings (connexion Git)
+# IMPORTANT :
+# - repository_name = repository_id (stable, utilisé par l'API)
+# - évite repo_name/repo_display_name si tu ne les utilises pas dans main.tf
+#   (sinon drift / confusion).
 # ---------------------------------------------------------------------------
 
-# URL du repo Git distant en HTTPS (recommandé) :
-# ex: https://github.com/alexfokam-debug/GCP-Lakehouse-From-Scratch.git
-variable "git_repo_url" {
-  description = "URL HTTPS du dépôt Git à connecter à Dataform"
-  type        = string
-}
-
-# Branche Git par défaut (obligatoire côté Dataform)
-variable "git_default_branch" {
-  description = "Branche Git par défaut (ex: main)"
-  type        = string
-  default     = "main"
-}
-
-# Secret Manager : version du secret contenant le token Git
-# Format attendu :
-# projects/<PROJECT_NUMBER>/secrets/<SECRET_NAME>/versions/latest
-variable "git_token_secret_version" {
-  description = "Secret Manager version contenant le token Git (PAT) pour Dataform"
+variable "repository_name" {
+  description = "Repository Dataform ID (ex: lakehouse-dev-dataform)"
   type        = string
 }
 
@@ -76,7 +44,6 @@ variable "git_token_secret_version" {
 # Labels
 # ---------------------------------------------------------------------------
 
-# Labels communs (FinOps / gouvernance)
 variable "labels" {
   description = "Labels à appliquer aux ressources Dataform"
   type        = map(string)
@@ -84,97 +51,87 @@ variable "labels" {
 }
 
 # ---------------------------------------------------------------------------
-# Dataset cible pour les tables/vues Dataform (ex: analytics_dev)
+# Dataform compilation defaults
 # ---------------------------------------------------------------------------
+
 variable "default_schema" {
-  description = "Dataset BigQuery par défaut où Dataform écrit les objets (tables/vues)."
+  description = "Dataset BigQuery par défaut où Dataform écrit les objets (ex: analytics_dev)"
   type        = string
 }
 
-# ---------------------------------------------------------------------------
-# Git commitish = branche/tag/sha que Dataform doit utiliser (souvent main)
-# ---------------------------------------------------------------------------
 variable "git_commitish" {
-  description = "Référence Git à compiler/exécuter (branche, tag ou sha)."
+  description = "Référence Git à compiler (branche/tag/sha). Souvent 'main'."
   type        = string
   default     = "main"
 }
 
 # ---------------------------------------------------------------------------
-# Timezone pour le scheduler Dataform (important pour du 'prod-like')
+# Workflows scheduling
 # ---------------------------------------------------------------------------
+
 variable "time_zone" {
-  description = "Timezone utilisée par Dataform pour interpréter le cron_schedule."
+  description = "Timezone utilisée par Dataform pour interpréter cron_schedule."
   type        = string
   default     = "Europe/Paris"
 }
 
-# ---------------------------------------------------------------------------
-# CRON du workflow (prod-like : lun-ven à 06:00)
-# ---------------------------------------------------------------------------
 variable "workflow_cron" {
   description = "Cron Dataform. Ex: '0 6 * * 1-5' = lun-ven 06:00."
   type        = string
   default     = "0 6 * * 1-5"
 }
 
-##############################################
-# Dataform - Git settings (Enterprise)
-##############################################
+# ---------------------------------------------------------------------------
+# Git remote settings (Enterprise)
+#
+# - enable_git : active ou non le bloc git_remote_settings
+# - dataform_git_repo_url : URL HTTPS du repo
+# - dataform_git_token_secret_version : version du secret SM (projects/.../versions/...)
+# ---------------------------------------------------------------------------
 
 variable "enable_git" {
-  description = "Active la configuration Git Remote Settings du repo Dataform."
+  description = "Active la configuration Git Remote Settings sur le repo Dataform."
   type        = bool
-  default     = false
+  default     = true
 }
-
-variable "git_url" {
-  description = "URL Git du repository Dataform (ex: https://github.com/org/repo)."
-  type        = string
-  default     = null
-}
-
-
-variable "git_token_secret_id" {
-  description = <<EOT
-ID du secret Secret Manager qui contient le token Git.
-⚠️ Enterprise rule: Terraform NE DOIT PAS stocker le token, uniquement référencer 'latest'.
-Ex: dataform-git-token
-EOT
-  type        = string
-  default     = "dataform-git-token"
-}
-
-
-variable "repository_name" {
-  description = "Nom du repository Dataform (ex: lakehouse-dev-dataform)"
-  type        = string
-}
-##############################################################################
-# Dataform module inputs (Enterprise)
-##############################################################################
-
-# ---- Git config (reprend tes noms tfvars) ----
 
 variable "dataform_git_repo_url" {
-  description = "URL HTTPS du repo Git."
+  description = "URL HTTPS du repo Git (ex: https://github.com/org/repo.git)"
   type        = string
-  default     = null
+  default     = ""
 }
 
 variable "dataform_default_branch" {
-  description = "Branche par défaut."
+  description = "Branche par défaut du repo Git (ex: main)."
   type        = string
   default     = "main"
 }
 
 variable "dataform_git_token_secret_version" {
-  description = "Resource name de la version secret (versions/latest)."
+  description = "Secret Manager VERSION resource: projects/.../secrets/.../versions/<ver|latest>"
   type        = string
-  default     = null
+  default     = ""
+
+  validation {
+    condition = (
+      var.dataform_git_token_secret_version == ""
+      || can(regex("^projects/.+/secrets/.+/versions/.+$", var.dataform_git_token_secret_version))
+    )
+    error_message = "dataform_git_token_secret_version must be empty or in the form: projects/<id>/secrets/<name>/versions/<ver|latest>."
+  }
 }
+
+# ---------------------------------------------------------------------------
+# Runtime service account (Dataform execution)
+# ---------------------------------------------------------------------------
 
 variable "dataform_sa_email" {
   description = "Email du service account Dataform runtime (ex: sa-dataform-dev@PROJECT.iam.gserviceaccount.com)."
   type        = string
+}
+
+variable "repo_display_name" {
+  description = "Nom d'affichage du repository Dataform (UI Console). Laisse vide pour utiliser repository_name."
+  type        = string
+  default     = ""
 }

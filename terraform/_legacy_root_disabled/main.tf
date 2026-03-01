@@ -104,7 +104,7 @@ resource "google_project_service" "services" {
 # - Structuration domain/dataset au besoin (selon ton module ./modules/gcs)
 # =============================================================================
 module "gcs_raw" {
-  source = "./modules/gcs"
+  source = "../modules/gcs"
 
   # Projet dans lequel créer le bucket
   project_id = var.project_id
@@ -134,7 +134,7 @@ module "gcs_raw" {
 # - Créer le bucket CURATED (données prêtes à exposer / partagées)
 # =============================================================================
 module "gcs_curated" {
-  source = "./modules/gcs"
+  source = "../modules/gcs"
 
   project_id  = var.project_id
   bucket_name = "${var.project_id}-curated-${var.environment}"
@@ -159,7 +159,7 @@ module "gcs_curated" {
 # - Exposer outputs (biglake_connection_sa / biglake_connection_id / etc.)
 # =============================================================================
 module "bq" {
-  source = "./modules/bigquery"
+  source = "../modules/bigquery"
 
   project_id  = var.project_id
   environment = var.environment
@@ -299,7 +299,7 @@ resource "google_bigquery_dataset" "analytics" {
 # - Le module attend raw_external_dataset => on lui passe le dataset_id
 # =============================================================================
 module "dataplex" {
-  source = "./modules/dataplex"
+  source = "../modules/dataplex"
 
   project_id  = var.project_id
   region      = var.region
@@ -405,7 +405,7 @@ resource "google_bigquery_dataset" "curated_iceberg" {
 # - Stocker les fichiers iceberg (metadata + data)
 # =============================================================================
 module "gcs_iceberg" {
-  source = "./modules/gcs"
+  source = "../modules/gcs"
 
   project_id  = var.project_id
   bucket_name = "${var.project_id}-iceberg-${var.environment}"
@@ -447,7 +447,7 @@ resource "google_storage_bucket_iam_member" "iceberg_bucket_reader" {
 # 16) GCS — Bucket SCRIPTS (artefacts jobs Dataproc)
 # =============================================================================
 module "gcs_scripts" {
-  source = "./modules/gcs"
+  source = "../modules/gcs"
 
   project_id  = var.project_id
   bucket_name = "${var.project_id}-scripts-${var.environment}"
@@ -469,7 +469,7 @@ module "gcs_scripts" {
 # - On corrige avec la convention simple : "${var.project_id}-dataproc-temp-${env}"
 # =============================================================================
 module "gcs_dataproc_temp" {
-  source = "./modules/gcs"
+  source = "../modules/gcs"
 
   project_id  = var.project_id
   location    = var.region
@@ -498,7 +498,7 @@ module "gcs_dataproc_temp" {
 # - Le switch bootstrap_ci_iam pilote les bindings CI (backend bucket + secret)
 # =============================================================================
 module "iam" {
-  source = "./modules/iam"
+  source = "../modules/iam"
 
   # Contexte
   project_id  = var.project_id
@@ -536,6 +536,7 @@ module "iam" {
   # Secret id (pas le full resource name)
   git_token_secret_id = var.git_token_secret_id
   manage_wif          = var.manage_wif
+  enable_github_cicd_wif_pool_admin = var.enable_github_cicd_wif_pool_admin
 }
 
 # =============================================================================
@@ -573,7 +574,7 @@ module "iam" {
 # - Le runtime SA utilisé par les workflows est dataform_sa_email (tfvars)
 # =============================================================================
 module "dataform" {
-  source = "./modules/dataform"
+  source = "../modules/dataform"
 
   providers = {
     google      = google
@@ -585,10 +586,6 @@ module "dataform" {
   region          = var.region
   environment     = var.environment
   repository_name = var.dataform_repository_name
-
-  # Nommage Dataform repo
-  repo_name         = "lakehouse-${var.environment}-dataform"
-  repo_display_name = "lakehouse-${var.environment}-dataform"
 
   # Git settings
   git_repo_url       = var.dataform_git_repo_url
@@ -631,7 +628,7 @@ resource "google_storage_bucket_object" "bootstrap_sales_transactions_parquet" {
 }
 
 module "project_labels" {
-  source     = "./modules/project_labels"
+  source     = "../modules/project_labels"
   project_id = var.project_id
 
   labels = {
