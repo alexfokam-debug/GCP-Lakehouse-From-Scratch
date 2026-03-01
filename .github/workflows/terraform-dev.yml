@@ -20,9 +20,11 @@ jobs:
   terraform-plan-dev:
     environment: dev
     runs-on: ubuntu-latest
+
+    # ✅ Job-level env : valeurs disponibles partout (bash + yaml expressions)
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID_DEV }}
-      TF_STATE_BUCKET_DEV: ${{ vars.TF_STATE_BUCKET_DEV }}
+      TF_BUCKET: ${{ vars.TF_STATE_BUCKET_DEV }}
 
     steps:
       - name: Checkout
@@ -39,23 +41,18 @@ jobs:
           echo "actor=${GITHUB_ACTOR}"
           echo "repo=${GITHUB_REPOSITORY}"
 
+          # Vars (environment variables, non-sensitive)
           : "${{ vars.GCP_PROJECT_ID_DEV }}"
           : "${{ vars.TF_STATE_BUCKET_DEV }}"
-
           echo "Vars OK"
-        
-      - name: Normalize DEV vars
-        shell: bash
-        run: |
-          set -euo pipefail
 
-          PROJECT_ID="$(printf '%s' "${{ vars.GCP_PROJECT_ID_DEV }}" | tr -d '\r\n' | xargs)"
-          TF_BUCKET="$(printf '%s' "${{ vars.TF_STATE_BUCKET_DEV }}" | tr -d '\r\n' | xargs)"
+          # Secrets (sensitive)
+          : "${{ secrets.GCP_WIF_PROVIDER_DEV }}"
+          : "${{ secrets.GCP_WIF_SA_DEV }}"
+          echo "Secrets OK (masked)"
 
-          echo "PROJECT_ID=${PROJECT_ID}" >> "$GITHUB_ENV"
-          echo "TF_BUCKET=${TF_BUCKET}" >> "$GITHUB_ENV"  
-              
-        
+          echo "PROJECT_ID=${PROJECT_ID}"
+          echo "TF_BUCKET=${TF_BUCKET}"
 
       # 1) Auth via WIF (ADC)
       - name: Authenticate to Google Cloud (WIF)
@@ -67,29 +64,33 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      # 2) gcloud setup
+      # 2) gcloud setup (⚠️ ici il faut une expression GitHub, pas $PROJECT_ID)
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: $PROJECT_ID
+          project_id: ${{ env.PROJECT_ID }}
 
-      # 2bis) Force project context everywhere (avoid "lakehouse-dev" confusion)
+      # 2bis) Force project context everywhere
       - name: Force project env (fail fast)
         shell: bash
         run: |
           set -euo pipefail
-          PROJECT_ID="$PROJECT_ID"
-          if [[ -z "$PROJECT_ID" ]]; then
-            echo "❌ vars.GCP_PROJECT_ID_DEV is empty"
+
+          if [[ -z "${PROJECT_ID}" ]]; then
+            echo "❌ PROJECT_ID is empty (vars.GCP_PROJECT_ID_DEV)"
+            exit 1
+          fi
+          if [[ -z "${TF_BUCKET}" ]]; then
+            echo "❌ TF_BUCKET is empty (vars.TF_STATE_BUCKET_DEV)"
             exit 1
           fi
 
-          echo "PROJECT_ID=$PROJECT_ID"
-          echo "CLOUDSDK_CORE_PROJECT=$PROJECT_ID" >> "$GITHUB_ENV"
-          echo "GOOGLE_CLOUD_PROJECT=$PROJECT_ID"  >> "$GITHUB_ENV"
-          echo "GOOGLE_PROJECT=$PROJECT_ID"        >> "$GITHUB_ENV"
-          echo "GCP_PROJECT=$PROJECT_ID"           >> "$GITHUB_ENV"
-      # 3) Verify identity + tokeninfo (debug but should not break the job)
+          echo "CLOUDSDK_CORE_PROJECT=${PROJECT_ID}" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_PROJECT=${PROJECT_ID}"  >> "$GITHUB_ENV"
+          echo "GOOGLE_PROJECT=${PROJECT_ID}"        >> "$GITHUB_ENV"
+          echo "GCP_PROJECT=${PROJECT_ID}"           >> "$GITHUB_ENV"
+
+      # 3) Verify identity (debug - best effort)
       - name: Verify identity (debug)
         shell: bash
         run: |
@@ -99,27 +100,16 @@ jobs:
           echo "== gcloud version =="
           gcloud version || true
 
-          echo "== gcloud config (after forcing project env) =="
+          echo "== gcloud config =="
           gcloud config list || true
 
           echo "== gcloud auth list =="
           gcloud auth list || true
 
-          echo "== access token + tokeninfo (best effort) =="
-          TOKEN="$(gcloud auth print-access-token 2>/tmp/token_err.txt || true)"
-          if [[ -n "${TOKEN}" ]]; then
-            curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${TOKEN}" \
-              | jq -r '.email,.aud,.azp' || true
-          else
-            echo "⚠️ No token (debug only)"
-            cat /tmp/token_err.txt || true
-          fi
+          echo "== project describe =="
+          gcloud projects describe "${PROJECT_ID}" >/dev/null && echo "OK: can read project" || true
 
-          echo "== project describe (permission check) =="
-          gcloud projects describe "$PROJECT_ID" >/dev/null && echo "OK: can read project" || true
-      # 4) Impersonation test (debug only - do NOT fail the job here)
-      # NOTE: In CI with google-github-actions/auth, you typically DO NOT need
-      # --impersonate-service-account; the action already minted creds for that SA.
+      # 4) Impersonation test (debug only)
       - name: Impersonation test (debug)
         continue-on-error: true
         shell: bash
@@ -135,23 +125,22 @@ jobs:
             echo "OK: impersonation worked"
           fi
 
-      # 5) Quick API permission probes (mostly fail fast, except dataplex/dataform may be empty)
+      # 5) API probes
       - name: API probes (BigQuery / Secret Manager / Dataplex / Dataform)
         shell: bash
         run: |
           set -euo pipefail
-          PROJECT="$PROJECT_ID"
 
           echo "== Secret Manager probe =="
-          gcloud secrets list --project "${PROJECT}" --limit=5 >/dev/null
+          gcloud secrets list --project "${PROJECT_ID}" --limit=5 >/dev/null
           echo "OK: secrets list"
 
           echo "== BigQuery probe =="
-          bq --project_id="${PROJECT}" ls >/dev/null
+          bq --project_id="${PROJECT_ID}" ls >/dev/null
           echo "OK: bq ls"
 
           echo "== Dataplex probe (best effort) =="
-          gcloud dataplex lakes list --project "${PROJECT}" --location="europe-west1" --limit=5 >/dev/null 2>/tmp/dp_err.txt || true
+          gcloud dataplex lakes list --project "${PROJECT_ID}" --location="europe-west1" --limit=5 >/dev/null 2>/tmp/dp_err.txt || true
           if [ -s /tmp/dp_err.txt ]; then
             echo "⚠️ Dataplex probe warning (ignored):"
             cat /tmp/dp_err.txt || true
@@ -159,28 +148,17 @@ jobs:
             echo "OK: dataplex lakes list"
           fi
 
-          echo "== Dataform API probe (best effort) =="
-          TOKEN="$(gcloud auth print-access-token 2>/dev/null || true)"
-          if [ -n "${TOKEN}" ]; then
-            curl -s -H "Authorization: Bearer ${TOKEN}" \
-              "https://dataform.googleapis.com/v1beta1/projects/${PROJECT}/locations/europe-west1/repositories?pageSize=5" \
-              | jq -r '.repositories[].name' || true
-          else
-            echo "⚠️ No token available for Dataform probe (ignored)."
-          fi
-
-      # 6) Backend sanity checks (bucket + state objects)
+      # 6) Backend sanity checks
       - name: Backend sanity (GCS state)
         shell: bash
         run: |
           set -euo pipefail
-          BUCKET="$TF_BUCKET"
           echo "== bucket ls =="
-          gcloud storage ls "gs://${BUCKET}/" >/dev/null && echo "OK: bucket reachable"
+          gcloud storage ls "gs://${TF_BUCKET}/" >/dev/null && echo "OK: bucket reachable"
 
           echo "== state objects (foundation/dev, lakehouse/dev) =="
-          gcloud storage ls "gs://${BUCKET}/foundation/dev/" --recursive || true
-          gcloud storage ls "gs://${BUCKET}/lakehouse/dev/" --recursive || true
+          gcloud storage ls "gs://${TF_BUCKET}/foundation/dev/" --recursive || true
+          gcloud storage ls "gs://${TF_BUCKET}/lakehouse/dev/" --recursive || true
 
       # 7) Setup Terraform
       - name: Setup Terraform
@@ -202,7 +180,7 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=terraform/foundation init -reconfigure \
-            -backend-config="bucket=$TF_BUCKET" \
+            -backend-config="bucket=${TF_BUCKET}" \
             -backend-config="prefix=foundation/dev"
 
       - name: Terraform validate (foundation)
@@ -210,35 +188,17 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=terraform/foundation validate
-          
-
-      - name: Sanity check repo tree (debug)
-        shell: bash
-        run: |
-          set -euo pipefail
-          pwd
-          ls -la
-          echo "== terraform tree =="
-          find terraform -maxdepth 2 -type f -name "*.tf" -print | head -n 50
 
       - name: Terraform plan (foundation/dev)
         shell: bash
         env:
-          CLOUDSDK_CORE_PROJECT: $PROJECT_ID
-          GOOGLE_CLOUD_PROJECT: $PROJECT_ID
+          CLOUDSDK_CORE_PROJECT: ${{ env.PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.PROJECT_ID }}
         run: |
           set -euo pipefail
           terraform -chdir=terraform/foundation plan \
             -compact-warnings \
             -var-file=envs/dev/terraform.tfvars
-
-      - name: Debug foundation (on failure)
-        if: failure()
-        shell: bash
-        run: |
-          terraform -chdir=terraform/foundation state list || true
-          terraform -chdir=terraform/foundation providers || true
-          terraform -chdir=terraform/foundation output || true
 
       # =========================
       # LAKEHOUSE ROOT
@@ -254,7 +214,7 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=terraform/lakehouse init -reconfigure \
-            -backend-config="bucket=$TF_BUCKET" \
+            -backend-config="bucket=${TF_BUCKET}" \
             -backend-config="prefix=lakehouse/dev"
 
       - name: Terraform validate (lakehouse)
@@ -262,32 +222,14 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=terraform/lakehouse validate
-          
-
-      - name: Sanity check repo tree (debug)
-        shell: bash
-        run: |
-          set -euo pipefail
-          pwd
-          ls -la
-          echo "== terraform tree =="
-          find terraform -maxdepth 2 -type f -name "*.tf" -print | head -n 50
 
       - name: Terraform plan (lakehouse/dev)
         shell: bash
         env:
-          CLOUDSDK_CORE_PROJECT: $PROJECT_ID
-          GOOGLE_CLOUD_PROJECT: $PROJECT_ID
+          CLOUDSDK_CORE_PROJECT: ${{ env.PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.PROJECT_ID }}
         run: |
           set -euo pipefail
           terraform -chdir=terraform/lakehouse plan \
             -compact-warnings \
             -var-file=envs/dev/terraform.tfvars
-
-      - name: Debug lakehouse (on failure)
-        if: failure()
-        shell: bash
-        run: |
-          terraform -chdir=terraform/lakehouse state list || true
-          terraform -chdir=terraform/lakehouse providers || true
-          terraform -chdir=terraform/lakehouse output || true
