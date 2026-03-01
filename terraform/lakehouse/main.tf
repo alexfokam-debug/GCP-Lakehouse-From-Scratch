@@ -440,18 +440,60 @@ module "dataform" {
 resource "google_storage_bucket_object" "bootstrap_orders_parquet" {
   count = var.enable_sales_orders_external_tables ? 1 : 0
 
+  # Objet "sentinelle" : sert uniquement à garantir qu'au moins 1 fichier matche
+  # les wildcards des external tables (évite les erreurs "matched no files").
   name   = "domain=${var.domain}/dataset=orders/orders_0001.parquet"
   bucket = module.gcs_raw.bucket_name
 
   # ✅ path.module => stable depuis ce fichier, même si tu changes le cwd
   source = "${path.module}/../../data/sample.parquet"
+
+  # -----------------------------------------------------------------------
+  # ENTREPRISE / CI-STABLE
+  # -----------------------------------------------------------------------
+  # Problème fréquent : Terraform détecte des "diffs" sur l'objet GCS (md5hash,
+  # generation, crc32c, etc.) même si l'objectif métier n'est pas de recharger
+  # ce fichier à chaque run.
+  #
+  # Ici, ce fichier est un bootstrap (placeholder). On veut donc :
+  # - éviter un drift permanent dans `plan`
+  # - éviter des updates inutiles en CI
+  #
+  # `detect_md5hash = false` : n'utilise pas le hash du fichier local pour
+  # déclencher un update.
+  detect_md5hash = false
+
+  # Le fichier est un simple bootstrap (placeholder). On ne veut pas que des
+  # changements de contenu local (sample.parquet) ou des métadonnées côté GCS
+  # provoquent un "plan" en drift permanent.
+  #
+  # `source` est un argument Terraform (pas un attribut provider-only), donc
+  # c'est le seul champ pertinent à ignorer ici.
+  lifecycle {
+    ignore_changes = [
+      source,
+    ]
+  }
 }
 
 resource "google_storage_bucket_object" "bootstrap_sales_transactions_parquet" {
   count = var.enable_sales_orders_external_tables ? 1 : 0
 
+  # Objet "sentinelle" : sert uniquement à garantir qu'au moins 1 fichier matche
+  # les wildcards des external tables (évite les erreurs "matched no files").
   name   = "domain=${var.domain}/dataset=sales_transactions/sales_transactions_0001.parquet"
   bucket = module.gcs_raw.bucket_name
 
   source = "${path.module}/../../data/sample.parquet"
+
+  # Même logique de stabilité CI que pour `bootstrap_orders_parquet`
+  detect_md5hash = false
+
+  # Même logique que pour `bootstrap_orders_parquet` : on ignore le `source`
+  # pour éviter des updates inutiles en CI.
+  lifecycle {
+    ignore_changes = [
+      source,
+    ]
+  }
 }
