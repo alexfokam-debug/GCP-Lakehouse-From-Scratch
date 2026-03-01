@@ -1,0 +1,188 @@
+name: Terraform reusable (plan/apply)
+
+on:
+  workflow_call:
+    inputs:
+      # dev | staging | prod
+      environment:
+        required: true
+        type: string
+
+      # plan (safe) ou apply (dangerous)
+      action:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform:
+    # IMPORTANT : ce champ "environment:" active le contrôle GitHub Environment
+    # -> tu pourras exiger des reviewers pour staging/prod
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+
+    # ----------------------------------------------------------
+    # Job env : on unifie les variables attendues par les steps
+    # ----------------------------------------------------------
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false" # pas d'interaction en CI
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------
+      # 0) Résolution des Vars/Secrets selon l'environnement
+      #    On lit Vars/Secrets depuis GitHub "Environments"
+      #    => Settings > Environments > dev/staging/prod
+      # ----------------------------------------------------------
+      - name: Resolve env config (vars/secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "ENV=${{ inputs.environment }}"
+          echo "ACTION=${{ inputs.action }}"
+
+          # ---- Vars (non-sensibles) définies dans Environment vars ----
+          : "${{ vars.GCP_PROJECT_ID }}"
+          : "${{ vars.TF_STATE_BUCKET }}"
+
+          # ---- Secrets (sensibles) définis dans Environment secrets ----
+          : "${{ secrets.GCP_WIF_PROVIDER }}"
+          : "${{ secrets.GCP_WIF_SA }}"
+
+          # On injecte dans GITHUB_ENV pour les steps suivants
+          echo "PROJECT_ID=${{ vars.GCP_PROJECT_ID }}" >> "$GITHUB_ENV"
+          echo "TF_BUCKET=${{ vars.TF_STATE_BUCKET }}" >> "$GITHUB_ENV"
+
+          echo "PROJECT_ID=${{ vars.GCP_PROJECT_ID }}"
+          echo "TF_BUCKET=${{ vars.TF_STATE_BUCKET }}"
+
+      # ----------------------------------------------------------
+      # 1) Auth GCP via WIF/OIDC (entreprise)
+      # ----------------------------------------------------------
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SA }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # ----------------------------------------------------------
+      # 2) gcloud setup + context projet
+      # ----------------------------------------------------------
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Force project context everywhere
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CLOUDSDK_CORE_PROJECT=${PROJECT_ID}" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_PROJECT=${PROJECT_ID}"  >> "$GITHUB_ENV"
+          echo "GOOGLE_PROJECT=${PROJECT_ID}"        >> "$GITHUB_ENV"
+          echo "GCP_PROJECT=${PROJECT_ID}"           >> "$GITHUB_ENV"
+
+      # ----------------------------------------------------------
+      # 3) API probes (fail fast sur les basiques)
+      # ----------------------------------------------------------
+      - name: API probes (fail fast)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud projects describe "${PROJECT_ID}" >/dev/null
+          gcloud storage ls "gs://${TF_BUCKET}/" >/dev/null
+          bq --project_id="${PROJECT_ID}" ls >/dev/null
+          echo "OK probes"
+
+      # ----------------------------------------------------------
+      # 4) Setup Terraform
+      # ----------------------------------------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      # ----------------------------------------------------------
+      # 5) FOUNDATION : fmt / init / validate / plan-or-apply
+      # ----------------------------------------------------------
+      - name: Terraform fmt (foundation)
+        shell: bash
+        run: terraform -chdir=terraform/foundation fmt -check -recursive
+
+      - name: Terraform init (foundation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation init -reconfigure -lockfile=readonly \
+            -backend-config="bucket=${TF_BUCKET}" \
+            -backend-config="prefix=foundation/${{ inputs.environment }}"
+
+      - name: Terraform validate (foundation)
+        shell: bash
+        run: terraform -chdir=terraform/foundation validate
+
+      - name: Terraform plan (foundation)
+        if: ${{ inputs.action == 'plan' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation plan \
+            -compact-warnings \
+            -var-file=envs/${{ inputs.environment }}/terraform.tfvars
+
+      - name: Terraform apply (foundation)
+        if: ${{ inputs.action == 'apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation apply \
+            -auto-approve \
+            -compact-warnings \
+            -var-file=envs/${{ inputs.environment }}/terraform.tfvars
+
+      # ----------------------------------------------------------
+      # 6) LAKEHOUSE : fmt / init / validate / plan-or-apply
+      # ----------------------------------------------------------
+      - name: Terraform fmt (lakehouse)
+        shell: bash
+        run: terraform -chdir=terraform/lakehouse fmt -check -recursive
+
+      - name: Terraform init (lakehouse)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse init -reconfigure -lockfile=readonly \
+            -backend-config="bucket=${TF_BUCKET}" \
+            -backend-config="prefix=lakehouse/${{ inputs.environment }}"
+
+      - name: Terraform validate (lakehouse)
+        shell: bash
+        run: terraform -chdir=terraform/lakehouse validate
+
+      - name: Terraform plan (lakehouse)
+        if: ${{ inputs.action == 'plan' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse plan \
+            -compact-warnings \
+            -var-file=envs/${{ inputs.environment }}/terraform.tfvars
+
+      - name: Terraform apply (lakehouse)
+        if: ${{ inputs.action == 'apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse apply \
+            -auto-approve \
+            -compact-warnings \
+            -var-file=envs/${{ inputs.environment }}/terraform.tfvars
