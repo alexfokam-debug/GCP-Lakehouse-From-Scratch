@@ -197,16 +197,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Source de vérité = GitHub vars (pas les env déjà polluées)
-          PROJECT_ID_CLEAN="$(printf '%s' "${{ vars.GCP_PROJECT_ID_DEV }}" | tr -d '\r\n' | xargs)"
-          TF_BUCKET_CLEAN="$(printf '%s' "${{ vars.TF_STATE_BUCKET_DEV }}" | tr -d '\r\n' | xargs)"
+          echo "PROJECT_ID_RAW='${PROJECT_ID:-}'"
+          echo "TF_BUCKET_RAW='${TF_BUCKET:-}'"
+
+          PROJECT_ID_CLEAN="$(printf '%s' "${PROJECT_ID:-}" | tr -d '\r\n' | xargs)"
+          TF_BUCKET_CLEAN="$(printf '%s' "${TF_BUCKET:-}" | tr -d '\r\n' | xargs)"
 
           if [[ -z "${PROJECT_ID_CLEAN}" ]]; then
-            echo "❌ PROJECT_ID empty after sanitize"
+            echo "❌ PROJECT_ID empty after sanitize (check vars.GCP_PROJECT_ID_DEV scope/name)"
             exit 1
           fi
           if [[ -z "${TF_BUCKET_CLEAN}" ]]; then
-            echo "❌ TF_BUCKET empty after sanitize"
+            echo "❌ TF_BUCKET empty after sanitize (check vars.TF_STATE_BUCKET_DEV scope/name)"
             exit 1
           fi
 
@@ -215,8 +217,14 @@ jobs:
 
           echo "✅ PROJECT_ID='${PROJECT_ID_CLEAN}'"
           echo "✅ TF_BUCKET='${TF_BUCKET_CLEAN}'"
-          echo "TF_BUCKET_LEN=$(printf '%s' "${TF_BUCKET_CLEAN}" | wc -c | tr -d ' ')"
+          
 
+      - name: Debug vars resolution (no secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "env.PROJECT_ID='${PROJECT_ID:-<empty>}'"
+          echo "env.TF_BUCKET='${TF_BUCKET:-<empty>}'"
       # ==========================================================
       # 7) Backend sanity (state bucket) : fail fast
       # ==========================================================
