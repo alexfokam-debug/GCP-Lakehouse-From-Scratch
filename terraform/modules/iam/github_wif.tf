@@ -27,7 +27,6 @@ resource "google_iam_workload_identity_pool" "github" {
   display_name              = "GitHub Pool (${var.environment})"
   description               = "OIDC pool for GitHub Actions (${var.environment})"
 }
-
 # ------------------------------------------------------------
 # 2) Provider OIDC GitHub (déclare la confiance GitHub -> GCP)
 # ------------------------------------------------------------
@@ -49,17 +48,40 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 
   # Mapping claims GitHub -> attributs GCP
   attribute_mapping = {
-    "google.subject"       = "assertion.sub"
-    "attribute.repository" = "assertion.repository"
-    "attribute.ref"        = "assertion.ref"
-    "attribute.actor"      = "assertion.actor"
-    "attribute.workflow"   = "assertion.workflow"
-  }
+  "google.subject"              = "assertion.sub"
+  "attribute.repository"        = "assertion.repository"
+  "attribute.repository_owner"  = "assertion.repository_owner"
+  "attribute.ref"               = "assertion.ref"
+  "attribute.actor"             = "assertion.actor"
+  "attribute.workflow"          = "assertion.workflow"
+  "attribute.job_workflow_ref"  = "assertion.job_workflow_ref"
+}
 
-  # Condition d'accès "prod-grade"
-  # - repo exact
-  # - branche main
-  attribute_condition = "attribute.repository == \"${var.github_repository}\" && attribute.ref == \"refs/heads/main\""
+    # --------------------------------------------------------------------------
+  # attribute_condition (CEL) — ENTERPRISE GRADE
+  #
+  # Objectif :
+  # - Toujours limiter au repo exact (security boundary n°1)
+  # - Autoriser main (push direct sur main)
+  # - Optionnel : autoriser les PR (refs/pull/<id>/merge ou refs/pull/<id>/head)
+  #
+  # Pourquoi pas startsWith() ?
+  # - Sur Workload Identity Provider, certaines fonctions CEL ne sont pas
+  #   disponibles / ou ont une signature différente => 400 "no overload".
+  #
+  # Solution robuste :
+  # - matches() avec regex (supporté)
+  # --------------------------------------------------------------------------
+  attribute_condition = var.allow_pull_request ? format(
+    "attribute.repository == %q && (attribute.ref == %q || attribute.ref.matches(%q))",
+    var.github_repository,
+    "refs/heads/main",
+    "^refs/pull/[0-9]+/(merge|head)$"
+  ) : format(
+    "attribute.repository == %q && attribute.ref == %q",
+    var.github_repository,
+    "refs/heads/main"
+  )
 }
 
 # ------------------------------------------------------------

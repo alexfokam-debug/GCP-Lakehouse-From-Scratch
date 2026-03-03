@@ -144,4 +144,7 @@ module "iam" {
   # 🔥 MODE FOUNDATION (TRÈS IMPORTANT)
   # ---------------------------------------------------------------------------
   enable_lakehouse_runtimes = false
+
+  allow_pull_request = var.allow_pull_request
 }
+

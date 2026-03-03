@@ -112,3 +112,4 @@ github_repository = "alexfokam-debug/GCP-Lakehouse-From-Scratch"
 tf_state_bucket_name             = "lakehouse-terraform-states-486419"
 create_dataform_git_token_secret = false
 manage_wif                       = true
+allow_pull_request       = true
