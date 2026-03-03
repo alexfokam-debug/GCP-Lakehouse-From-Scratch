@@ -1,20 +1,20 @@
 name: Terraform - Reusable (enterprise)
 
 # =============================================================================
-# CE WORKFLOW EST UN "MOTEUR" REUTILISABLE
+# WORKFLOW REUTILISABLE (MOTEUR)
 # -----------------------------------------------------------------------------
-# Il ne se déclenche PAS tout seul.
-# Il est appelé par dev/staging/prod via "uses: ./.github/workflows/..."
+# Ce workflow ne se déclenche PAS tout seul.
+# Il est appelé par dev/staging/prod via:
+#   uses: ./.github/workflows/terraform-reusable.yml
 #
-# Objectifs :
-#  - Mutualiser 100% de la logique CI Terraform (fmt/init/validate/plan/apply)
-#  - Standard entreprise : 1 logique, 3 environnements
-#  - Auth GCP via Workload Identity Federation (WIF) + OIDC GitHub
-#  - Garde-fous : PR fork/Dependabot => secrets non dispo => on SKIP proprement
-#
-# Inputs:
-#  - environment: dev | staging | prod
-#  - action: plan | apply
+# Objectifs (enterprise-grade) :
+# - Mutualiser la logique Terraform pour dev/staging/prod
+# - Auth GCP via Workload Identity Federation (OIDC GitHub -> WIF GCP)
+# - Garde-fous :
+#   - PR fork / Dependabot => secrets non injectés => on SKIP proprement
+# - Robustesse :
+#   - sanitize PROJECT_ID / TF_BUCKET avant tout appel gcloud
+#   - terraform fmt sur *.tf uniquement (pas sur tfvars)
 # =============================================================================
 
 on:
@@ -29,8 +29,8 @@ on:
         required: true
         type: string
 
-    # ✅ ENTERPRISE: on déclare explicitement les secrets requis
-    # -> évite l'erreur: "must specify exactly one of workload_identity_provider..."
+    # ENTERPRISE: on déclare explicitement les secrets attendus par le moteur
+    # -> évite l'erreur "must specify exactly one of workload_identity_provider..."
     secrets:
       GCP_WIF_PROVIDER:
         required: false
@@ -39,67 +39,107 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # indispensable pour OIDC -> WIF
+  id-token: write  # OBLIGATOIRE pour OIDC -> WIF
 
 jobs:
   terraform:
     name: Terraform ${{ inputs.action }} (${{ inputs.environment }})
     runs-on: ubuntu-latest
 
-    # ✅ On attache le job à un GitHub Environment:
+    # Attache le job à un GitHub Environment:
     # - permet Required reviewers (staging/prod)
-    # - permet env vars & env secrets par environnement
+    # - permet variables et secrets par environnement
     environment: ${{ inputs.environment }}
 
-    # ✅ Variables communes (entreprise)
-    # Elles viennent des "Environment variables" (Settings → Environments → ...)
+    # Variables communes:
+    # Ces variables viennent des "Environment Variables" de GitHub:
+    # Settings -> Environments -> <dev|staging|prod> -> Variables
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       TF_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-      TF_IN_AUTOMATION: "true"  # logs terraform plus clean, no prompt
-      TF_INPUT: "false"         # évite prompts interactifs
+
+      # Terraform en CI:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
 
     steps:
       # ==========================================================
-      # 0) Checkout
+      # 0) Checkout code
       # ==========================================================
       - name: Checkout
         uses: actions/checkout@v4
 
       # ==========================================================
-      # 1) Fail fast : vérifier présence des variables communes
+      # 1) Contexte (log)
+      # ==========================================================
+      - name: Print context (debug)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== Context =="
+          echo "event_name=${GITHUB_EVENT_NAME}"
+          echo "ref=${GITHUB_REF}"
+          echo "actor=${GITHUB_ACTOR}"
+          echo "repo=${GITHUB_REPOSITORY}"
+          echo "inputs.environment=${{ inputs.environment }}"
+          echo "inputs.action=${{ inputs.action }}"
+
+      # ==========================================================
+      # 2) Fail fast : vérifier présence des variables (non sensibles)
       # ==========================================================
       - name: Validate Environment Variables (fail fast)
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "== Context =="
-          echo "event_name=${GITHUB_EVENT_NAME}"
-          echo "ref=${GITHUB_REF}"
-          echo "actor=${GITHUB_ACTOR}"
-          echo "repo=${GITHUB_REPOSITORY}"
-          echo "env=${{ inputs.environment }}"
-          echo "action=${{ inputs.action }}"
-
-          # Vars (non sensibles)
-          if [[ -z "${PROJECT_ID}" ]]; then
-            echo "❌ Missing env var: vars.GCP_PROJECT_ID (Environment Variable)"
-            exit 1
-          fi
-          if [[ -z "${TF_BUCKET}" ]]; then
-            echo "❌ Missing env var: vars.TF_STATE_BUCKET (Environment Variable)"
+          if [[ -z "${PROJECT_ID:-}" ]]; then
+            echo "❌ Missing vars.GCP_PROJECT_ID in GitHub Environment '${{ inputs.environment }}'"
             exit 1
           fi
 
-          echo "✅ PROJECT_ID=${PROJECT_ID}"
-          echo "✅ TF_BUCKET=${TF_BUCKET}"
+          if [[ -z "${TF_BUCKET:-}" ]]; then
+            echo "❌ Missing vars.TF_STATE_BUCKET in GitHub Environment '${{ inputs.environment }}'"
+            exit 1
+          fi
+
+          echo "✅ PROJECT_ID(raw)='${PROJECT_ID}'"
+          echo "✅ TF_BUCKET(raw)='${TF_BUCKET}'"
 
       # ==========================================================
-      # 2) Détection "secrets disponibles ou pas"
-      #    - Sur PR fork ou certains bots, GitHub n'injecte pas les secrets
-      #    - Donc WIF_PROVIDER devient vide => auth@v2 échoue
-      #    => En entreprise: on SKIP l'auth (et donc le plan cloud) proprement
+      # 3) Sanitize inputs (IMPORTANT)
+      # ----------------------------------------------------------
+      # Problème rencontré: variable copiée/collée avec CR/LF -> bucket invalide
+      # => On nettoie / trim AVANT tout appel gcloud / terraform init backend
+      # ==========================================================
+      - name: Sanitize inputs (PROJECT_ID / TF_BUCKET)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT_ID_CLEAN="$(printf '%s' "${PROJECT_ID:-}" | tr -d '\r\n' | xargs)"
+          TF_BUCKET_CLEAN="$(printf '%s' "${TF_BUCKET:-}" | tr -d '\r\n' | xargs)"
+
+          if [[ -z "${PROJECT_ID_CLEAN}" ]]; then
+            echo "❌ PROJECT_ID empty after sanitize (check vars.GCP_PROJECT_ID)"
+            exit 1
+          fi
+          if [[ -z "${TF_BUCKET_CLEAN}" ]]; then
+            echo "❌ TF_BUCKET empty after sanitize (check vars.TF_STATE_BUCKET)"
+            exit 1
+          fi
+
+          echo "PROJECT_ID=${PROJECT_ID_CLEAN}" >> "$GITHUB_ENV"
+          echo "TF_BUCKET=${TF_BUCKET_CLEAN}"   >> "$GITHUB_ENV"
+
+          echo "✅ PROJECT_ID(clean)='${PROJECT_ID_CLEAN}'"
+          echo "✅ TF_BUCKET(clean)='${TF_BUCKET_CLEAN}'"
+
+      # ==========================================================
+      # 4) Détection "secrets disponibles ou pas"
+      # ----------------------------------------------------------
+      # Sur PR fork / Dependabot => GitHub n'injecte PAS les secrets.
+      # => auth@v2 échoue si workload_identity_provider vide.
+      # => En entreprise: on skip proprement et on sort OK.
       # ==========================================================
       - name: Detect secrets availability
         id: secrets_check
@@ -107,17 +147,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Si un secret manque => value vide
           if [[ -z "${{ secrets.GCP_WIF_PROVIDER }}" || -z "${{ secrets.GCP_WIF_SA }}" ]]; then
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ WIF secrets not available. This is expected for fork PRs / Dependabot."
+            echo "⚠️ WIF secrets NOT available (expected for fork PR / Dependabot)."
           else
             echo "available=true" >> "$GITHUB_OUTPUT"
             echo "✅ WIF secrets available."
           fi
 
       # ==========================================================
-      # 3) Auth GCP via WIF (uniquement si secrets disponibles)
+      # 5) Auth GCP via WIF (uniquement si secrets dispo)
       # ==========================================================
       - name: Authenticate to Google Cloud (WIF)
         if: steps.secrets_check.outputs.available == 'true'
@@ -128,9 +167,11 @@ jobs:
           service_account: ${{ secrets.GCP_WIF_SA }}
           create_credentials_file: true
           export_environment_variables: true
+          # optionnel: plus verbose si besoin
+          # token_format: "access_token"
 
       # ==========================================================
-      # 4) Setup gcloud (uniquement si auth OK)
+      # 6) Setup gcloud (uniquement si auth OK)
       # ==========================================================
       - name: Setup gcloud
         if: steps.secrets_check.outputs.available == 'true'
@@ -139,7 +180,7 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
 
       # ==========================================================
-      # 5) Forcer le contexte projet partout (gcloud + terraform provider)
+      # 7) Forcer le contexte projet (provider Terraform + gcloud)
       # ==========================================================
       - name: Force project context
         if: steps.secrets_check.outputs.available == 'true'
@@ -153,9 +194,9 @@ jobs:
           echo "Forced PROJECT_ID=${PROJECT_ID}"
 
       # ==========================================================
-      # 6) Debug identité (best effort)
+      # 8) Debug identité (best effort)
       # ==========================================================
-      - name: Verify identity (debug)
+      - name: Verify identity (debug, best effort)
         if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: |
@@ -165,68 +206,26 @@ jobs:
           gcloud config list || true
           gcloud auth list || true
           gcloud projects describe "${PROJECT_ID}" >/dev/null && echo "OK: can read project" || true
-          
 
       # ==========================================================
-      # DEBUG BUCKET (fail fast + diagnostic)
+      # 9) Debug bucket state (APRES sanitize)
+      # ----------------------------------------------------------
+      # Problème rencontré:
+      # - gcloud storage ls -> 404 bucket n'existe pas
+      # - ou bucket invalide (retour à la ligne)
+      # => ici, on "describe" le bucket pour fail fast + diagnostic clair
       # ==========================================================
-      - name: Debug TF_BUCKET (print + describe)
+      - name: Debug TF_BUCKET (describe)
+        if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: |
           set -euo pipefail
-
-          echo "TF_BUCKET_RAW='${TF_BUCKET}'"
+          echo "TF_BUCKET='${TF_BUCKET}'"
           echo "TF_BUCKET_LEN=$(printf '%s' "${TF_BUCKET}" | wc -c | tr -d ' ')"
-
-          echo "== Try describe bucket =="
-          # Si ça 404 ici -> variable pointe vers un bucket inexistant
           gcloud storage buckets describe "gs://${TF_BUCKET}" --format="value(name,location,storage_url)"
 
-          echo "== If needed, list buckets containing 'terraform' (best effort) =="
-          gcloud storage buckets list --project "${PROJECT_ID}" --format="value(name)" | grep -i terraform || true
-          
-
       # ==========================================================
-      # Normalize / sanitize vars
-      # - supprime CR/LF
-      # - trim espaces
-      # - fail fast si vide
-      # ==========================================================
-      - name: Sanitize inputs (PROJECT_ID / TF_BUCKET)
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "PROJECT_ID_RAW='${PROJECT_ID:-}'"
-          echo "TF_BUCKET_RAW='${TF_BUCKET:-}'"
-
-          PROJECT_ID_CLEAN="$(printf '%s' "${PROJECT_ID:-}" | tr -d '\r\n' | xargs)"
-          TF_BUCKET_CLEAN="$(printf '%s' "${TF_BUCKET:-}" | tr -d '\r\n' | xargs)"
-
-          if [[ -z "${PROJECT_ID_CLEAN}" ]]; then
-            echo "❌ PROJECT_ID empty after sanitize (check vars.GCP_PROJECT_ID_DEV scope/name)"
-            exit 1
-          fi
-          if [[ -z "${TF_BUCKET_CLEAN}" ]]; then
-            echo "❌ TF_BUCKET empty after sanitize (check vars.TF_STATE_BUCKET_DEV scope/name)"
-            exit 1
-          fi
-
-          echo "PROJECT_ID=${PROJECT_ID_CLEAN}" >> "$GITHUB_ENV"
-          echo "TF_BUCKET=${TF_BUCKET_CLEAN}"   >> "$GITHUB_ENV"
-
-          echo "✅ PROJECT_ID='${PROJECT_ID_CLEAN}'"
-          echo "✅ TF_BUCKET='${TF_BUCKET_CLEAN}'"
-          
-
-      - name: Debug vars resolution (no secrets)
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "env.PROJECT_ID='${PROJECT_ID:-<empty>}'"
-          echo "env.TF_BUCKET='${TF_BUCKET:-<empty>}'"
-      # ==========================================================
-      # 7) Backend sanity (state bucket) : fail fast
+      # 10) Backend sanity (GCS state) - fail fast
       # ==========================================================
       - name: Backend sanity (GCS state) - fail fast
         if: steps.secrets_check.outputs.available == 'true'
@@ -237,7 +236,7 @@ jobs:
           echo "OK: bucket reachable: gs://${TF_BUCKET}"
 
       # ==========================================================
-      # 8) Setup Terraform
+      # 11) Setup Terraform
       # ==========================================================
       - name: Setup Terraform
         if: steps.secrets_check.outputs.available == 'true'
@@ -246,12 +245,19 @@ jobs:
           terraform_version: 1.7.5
 
       # ==========================================================
-      # 9) FOUNDATION : fmt / init / validate / plan|apply
+      # 12) FOUNDATION : fmt / init / validate / plan|apply
+      # ----------------------------------------------------------
+      # IMPORTANT:
+      # - terraform fmt -recursive formate aussi les *.tfvars => ça cassait chez toi
+      # => on fait fmt UNIQUEMENT sur les *.tf
       # ==========================================================
-      - name: Terraform fmt (foundation)
+      - name: Terraform fmt (foundation) - only *.tf
         if: steps.secrets_check.outputs.available == 'true'
         shell: bash
-        run: terraform fmt -check -recursive $(find . -type f -name "*.tf" -print)
+        run: |
+          set -euo pipefail
+          cd terraform/foundation
+          terraform fmt -check -recursive $(find . -type f -name "*.tf" -print)
 
       - name: Terraform init (foundation)
         if: steps.secrets_check.outputs.available == 'true'
@@ -284,12 +290,15 @@ jobs:
             -var-file=envs/${{ inputs.environment }}/terraform.tfvars
 
       # ==========================================================
-      # 10) LAKEHOUSE : fmt / init / validate / plan|apply
+      # 13) LAKEHOUSE : fmt / init / validate / plan|apply
       # ==========================================================
-      - name: Terraform fmt (lakehouse)
+      - name: Terraform fmt (lakehouse) - only *.tf
         if: steps.secrets_check.outputs.available == 'true'
         shell: bash
-        run: terraform fmt -check -recursive $(find . -type f -name "*.tf" -print)
+        run: |
+          set -euo pipefail
+          cd terraform/lakehouse
+          terraform fmt -check -recursive $(find . -type f -name "*.tf" -print)
 
       - name: Terraform init (lakehouse)
         if: steps.secrets_check.outputs.available == 'true'
@@ -322,11 +331,11 @@ jobs:
             -var-file=envs/${{ inputs.environment }}/terraform.tfvars
 
       # ==========================================================
-      # 11) Si secrets non dispo (PR fork/Dependabot) : on informe et on sort OK
+      # 14) Mode "secrets non dispo" : on informe et on sort OK
       # ==========================================================
       - name: Skip message (no secrets)
         if: steps.secrets_check.outputs.available == 'false'
         shell: bash
         run: |
           echo "ℹ️ Skipping Terraform because WIF secrets are not available (fork PR / Dependabot)."
-          echo "This is enterprise-standard behavior to avoid leaking secrets."
+          echo "Enterprise-standard behavior: avoid leaking secrets."
