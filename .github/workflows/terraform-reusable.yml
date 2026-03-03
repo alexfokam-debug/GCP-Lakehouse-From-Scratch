@@ -165,6 +165,25 @@ jobs:
           gcloud config list || true
           gcloud auth list || true
           gcloud projects describe "${PROJECT_ID}" >/dev/null && echo "OK: can read project" || true
+          
+
+      # ==========================================================
+      # DEBUG BUCKET (fail fast + diagnostic)
+      # ==========================================================
+      - name: Debug TF_BUCKET (print + describe)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "TF_BUCKET_RAW='${TF_BUCKET}'"
+          echo "TF_BUCKET_LEN=$(printf '%s' "${TF_BUCKET}" | wc -c | tr -d ' ')"
+
+          echo "== Try describe bucket =="
+          # Si ça 404 ici -> variable pointe vers un bucket inexistant
+          gcloud storage buckets describe "gs://${TF_BUCKET}" --format="value(name,location,storage_url)"
+
+          echo "== If needed, list buckets containing 'terraform' (best effort) =="
+          gcloud storage buckets list --project "${PROJECT_ID}" --format="value(name)" | grep -i terraform || true
 
       # ==========================================================
       # 7) Backend sanity (state bucket) : fail fast
