@@ -1,14 +1,10 @@
-name: Terraform STAGING
+name: Terraform - STAGING
 
 on:
-  pull_request:
-    paths:
-      - "terraform/**"
-      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
       action:
-        description: "plan ou apply"
+        description: "plan or apply"
         required: true
         default: "plan"
         type: choice
@@ -19,16 +15,9 @@ permissions:
   id-token: write
 
 jobs:
-  plan:
-    if: ${{ github.event_name != 'workflow_dispatch' }}
-    uses: ./.github/workflows/terraform-reusable.yml
-    with:
-      environment: staging
-      action: plan
-
-  manual:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+  run:
     uses: ./.github/workflows/terraform-reusable.yml
     with:
       environment: staging
       action: ${{ inputs.action }}
+    secrets: inherit
