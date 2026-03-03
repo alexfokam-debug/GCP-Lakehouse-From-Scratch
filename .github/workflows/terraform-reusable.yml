@@ -251,7 +251,7 @@ jobs:
       - name: Terraform fmt (foundation)
         if: steps.secrets_check.outputs.available == 'true'
         shell: bash
-        run: terraform -chdir=terraform/foundation fmt -check -recursive
+        run: terraform fmt -check -recursive $(find . -type f -name "*.tf" -print)
 
       - name: Terraform init (foundation)
         if: steps.secrets_check.outputs.available == 'true'
@@ -289,7 +289,7 @@ jobs:
       - name: Terraform fmt (lakehouse)
         if: steps.secrets_check.outputs.available == 'true'
         shell: bash
-        run: terraform -chdir=terraform/lakehouse fmt -check -recursive
+        run: terraform fmt -check -recursive $(find . -type f -name "*.tf" -print)
 
       - name: Terraform init (lakehouse)
         if: steps.secrets_check.outputs.available == 'true'
