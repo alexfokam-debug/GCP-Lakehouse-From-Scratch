@@ -132,3 +132,15 @@ variable "enable_github_cicd_wif_pool_admin" {
   type        = bool
   default     = false
 }
+
+variable "github_repository_owner" {
+  description = "Optionnel. Si null, déduit automatiquement depuis github_repository"
+  type        = string
+  default     = null
+}
+
+variable "allow_pull_request" {
+  description = "Autoriser l'auth via PR (refs/pull/*). En entreprise: true pour plan, false pour apply."
+  type        = bool
+  default     = false
+}

@@ -93,3 +93,5 @@ enable_samples = true
 # lakehouse-<project_id_short>-raw-staging
 project_id_short                 = "486419"
 create_dataform_git_token_secret = false
+allow_pull_request       = true
+github_repository        = "alexfokam-debug/GCP-Lakehouse-From-Scratch"
