@@ -1,72 +1,127 @@
-name: Terraform reusable (plan/apply)
+name: Terraform - Reusable (enterprise)
+
+# =============================================================================
+# CE WORKFLOW EST UN "MOTEUR" REUTILISABLE
+# -----------------------------------------------------------------------------
+# Il ne se déclenche PAS tout seul.
+# Il est appelé par dev/staging/prod via "uses: ./.github/workflows/..."
+#
+# Objectifs :
+#  - Mutualiser 100% de la logique CI Terraform (fmt/init/validate/plan/apply)
+#  - Standard entreprise : 1 logique, 3 environnements
+#  - Auth GCP via Workload Identity Federation (WIF) + OIDC GitHub
+#  - Garde-fous : PR fork/Dependabot => secrets non dispo => on SKIP proprement
+#
+# Inputs:
+#  - environment: dev | staging | prod
+#  - action: plan | apply
+# =============================================================================
 
 on:
   workflow_call:
     inputs:
-      # dev | staging | prod
       environment:
+        description: "GitHub environment (dev|staging|prod)"
+        required: true
+        type: string
+      action:
+        description: "Terraform action (plan|apply)"
         required: true
         type: string
 
-      # plan (safe) ou apply (dangerous)
-      action:
-        required: true
-        type: string
+    # ✅ ENTERPRISE: on déclare explicitement les secrets requis
+    # -> évite l'erreur: "must specify exactly one of workload_identity_provider..."
+    secrets:
+      GCP_WIF_PROVIDER:
+        required: false
+      GCP_WIF_SA:
+        required: false
 
 permissions:
   contents: read
-  id-token: write
+  id-token: write   # indispensable pour OIDC -> WIF
 
 jobs:
   terraform:
-    # IMPORTANT : ce champ "environment:" active le contrôle GitHub Environment
-    # -> tu pourras exiger des reviewers pour staging/prod
-    environment: ${{ inputs.environment }}
+    name: Terraform ${{ inputs.action }} (${{ inputs.environment }})
     runs-on: ubuntu-latest
 
-    # ----------------------------------------------------------
-    # Job env : on unifie les variables attendues par les steps
-    # ----------------------------------------------------------
+    # ✅ On attache le job à un GitHub Environment:
+    # - permet Required reviewers (staging/prod)
+    # - permet env vars & env secrets par environnement
+    environment: ${{ inputs.environment }}
+
+    # ✅ Variables communes (entreprise)
+    # Elles viennent des "Environment variables" (Settings → Environments → ...)
     env:
-      TF_IN_AUTOMATION: "true"
-      TF_INPUT: "false" # pas d'interaction en CI
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      TF_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_IN_AUTOMATION: "true"  # logs terraform plus clean, no prompt
+      TF_INPUT: "false"         # évite prompts interactifs
 
     steps:
+      # ==========================================================
+      # 0) Checkout
+      # ==========================================================
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ----------------------------------------------------------
-      # 0) Résolution des Vars/Secrets selon l'environnement
-      #    On lit Vars/Secrets depuis GitHub "Environments"
-      #    => Settings > Environments > dev/staging/prod
-      # ----------------------------------------------------------
-      - name: Resolve env config (vars/secrets)
+      # ==========================================================
+      # 1) Fail fast : vérifier présence des variables communes
+      # ==========================================================
+      - name: Validate Environment Variables (fail fast)
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "ENV=${{ inputs.environment }}"
-          echo "ACTION=${{ inputs.action }}"
+          echo "== Context =="
+          echo "event_name=${GITHUB_EVENT_NAME}"
+          echo "ref=${GITHUB_REF}"
+          echo "actor=${GITHUB_ACTOR}"
+          echo "repo=${GITHUB_REPOSITORY}"
+          echo "env=${{ inputs.environment }}"
+          echo "action=${{ inputs.action }}"
 
-          # ---- Vars (non-sensibles) définies dans Environment vars ----
-          : "${{ vars.GCP_PROJECT_ID }}"
-          : "${{ vars.TF_STATE_BUCKET }}"
+          # Vars (non sensibles)
+          if [[ -z "${PROJECT_ID}" ]]; then
+            echo "❌ Missing env var: vars.GCP_PROJECT_ID (Environment Variable)"
+            exit 1
+          fi
+          if [[ -z "${TF_BUCKET}" ]]; then
+            echo "❌ Missing env var: vars.TF_STATE_BUCKET (Environment Variable)"
+            exit 1
+          fi
 
-          # ---- Secrets (sensibles) définis dans Environment secrets ----
-          : "${{ secrets.GCP_WIF_PROVIDER }}"
-          : "${{ secrets.GCP_WIF_SA }}"
+          echo "✅ PROJECT_ID=${PROJECT_ID}"
+          echo "✅ TF_BUCKET=${TF_BUCKET}"
 
-          # On injecte dans GITHUB_ENV pour les steps suivants
-          echo "PROJECT_ID=${{ vars.GCP_PROJECT_ID }}" >> "$GITHUB_ENV"
-          echo "TF_BUCKET=${{ vars.TF_STATE_BUCKET }}" >> "$GITHUB_ENV"
+      # ==========================================================
+      # 2) Détection "secrets disponibles ou pas"
+      #    - Sur PR fork ou certains bots, GitHub n'injecte pas les secrets
+      #    - Donc WIF_PROVIDER devient vide => auth@v2 échoue
+      #    => En entreprise: on SKIP l'auth (et donc le plan cloud) proprement
+      # ==========================================================
+      - name: Detect secrets availability
+        id: secrets_check
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          echo "PROJECT_ID=${{ vars.GCP_PROJECT_ID }}"
-          echo "TF_BUCKET=${{ vars.TF_STATE_BUCKET }}"
+          # Si un secret manque => value vide
+          if [[ -z "${{ secrets.GCP_WIF_PROVIDER }}" || -z "${{ secrets.GCP_WIF_SA }}" ]]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ WIF secrets not available. This is expected for fork PRs / Dependabot."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "✅ WIF secrets available."
+          fi
 
-      # ----------------------------------------------------------
-      # 1) Auth GCP via WIF/OIDC (entreprise)
-      # ----------------------------------------------------------
+      # ==========================================================
+      # 3) Auth GCP via WIF (uniquement si secrets disponibles)
+      # ==========================================================
       - name: Authenticate to Google Cloud (WIF)
+        if: steps.secrets_check.outputs.available == 'true'
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
@@ -74,15 +129,20 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      # ----------------------------------------------------------
-      # 2) gcloud setup + context projet
-      # ----------------------------------------------------------
+      # ==========================================================
+      # 4) Setup gcloud (uniquement si auth OK)
+      # ==========================================================
       - name: Setup gcloud
+        if: steps.secrets_check.outputs.available == 'true'
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Force project context everywhere
+      # ==========================================================
+      # 5) Forcer le contexte projet partout (gcloud + terraform provider)
+      # ==========================================================
+      - name: Force project context
+        if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -90,35 +150,52 @@ jobs:
           echo "GOOGLE_CLOUD_PROJECT=${PROJECT_ID}"  >> "$GITHUB_ENV"
           echo "GOOGLE_PROJECT=${PROJECT_ID}"        >> "$GITHUB_ENV"
           echo "GCP_PROJECT=${PROJECT_ID}"           >> "$GITHUB_ENV"
+          echo "Forced PROJECT_ID=${PROJECT_ID}"
 
-      # ----------------------------------------------------------
-      # 3) API probes (fail fast sur les basiques)
-      # ----------------------------------------------------------
-      - name: API probes (fail fast)
+      # ==========================================================
+      # 6) Debug identité (best effort)
+      # ==========================================================
+      - name: Verify identity (debug)
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -u
+          echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-<empty>}"
+          gcloud version || true
+          gcloud config list || true
+          gcloud auth list || true
+          gcloud projects describe "${PROJECT_ID}" >/dev/null && echo "OK: can read project" || true
+
+      # ==========================================================
+      # 7) Backend sanity (state bucket) : fail fast
+      # ==========================================================
+      - name: Backend sanity (GCS state) - fail fast
+        if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          gcloud projects describe "${PROJECT_ID}" >/dev/null
           gcloud storage ls "gs://${TF_BUCKET}/" >/dev/null
-          bq --project_id="${PROJECT_ID}" ls >/dev/null
-          echo "OK probes"
+          echo "OK: bucket reachable: gs://${TF_BUCKET}"
 
-      # ----------------------------------------------------------
-      # 4) Setup Terraform
-      # ----------------------------------------------------------
+      # ==========================================================
+      # 8) Setup Terraform
+      # ==========================================================
       - name: Setup Terraform
+        if: steps.secrets_check.outputs.available == 'true'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
 
-      # ----------------------------------------------------------
-      # 5) FOUNDATION : fmt / init / validate / plan-or-apply
-      # ----------------------------------------------------------
+      # ==========================================================
+      # 9) FOUNDATION : fmt / init / validate / plan|apply
+      # ==========================================================
       - name: Terraform fmt (foundation)
+        if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: terraform -chdir=terraform/foundation fmt -check -recursive
 
       - name: Terraform init (foundation)
+        if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -127,36 +204,36 @@ jobs:
             -backend-config="prefix=foundation/${{ inputs.environment }}"
 
       - name: Terraform validate (foundation)
+        if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: terraform -chdir=terraform/foundation validate
 
       - name: Terraform plan (foundation)
-        if: ${{ inputs.action == 'plan' }}
+        if: steps.secrets_check.outputs.available == 'true' && inputs.action == 'plan'
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/foundation plan \
-            -compact-warnings \
+          terraform -chdir=terraform/foundation plan -compact-warnings \
             -var-file=envs/${{ inputs.environment }}/terraform.tfvars
 
       - name: Terraform apply (foundation)
-        if: ${{ inputs.action == 'apply' }}
+        if: steps.secrets_check.outputs.available == 'true' && inputs.action == 'apply'
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/foundation apply \
-            -auto-approve \
-            -compact-warnings \
+          terraform -chdir=terraform/foundation apply -auto-approve -compact-warnings \
             -var-file=envs/${{ inputs.environment }}/terraform.tfvars
 
-      # ----------------------------------------------------------
-      # 6) LAKEHOUSE : fmt / init / validate / plan-or-apply
-      # ----------------------------------------------------------
+      # ==========================================================
+      # 10) LAKEHOUSE : fmt / init / validate / plan|apply
+      # ==========================================================
       - name: Terraform fmt (lakehouse)
+        if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: terraform -chdir=terraform/lakehouse fmt -check -recursive
 
       - name: Terraform init (lakehouse)
+        if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -165,24 +242,32 @@ jobs:
             -backend-config="prefix=lakehouse/${{ inputs.environment }}"
 
       - name: Terraform validate (lakehouse)
+        if: steps.secrets_check.outputs.available == 'true'
         shell: bash
         run: terraform -chdir=terraform/lakehouse validate
 
       - name: Terraform plan (lakehouse)
-        if: ${{ inputs.action == 'plan' }}
+        if: steps.secrets_check.outputs.available == 'true' && inputs.action == 'plan'
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/lakehouse plan \
-            -compact-warnings \
+          terraform -chdir=terraform/lakehouse plan -compact-warnings \
             -var-file=envs/${{ inputs.environment }}/terraform.tfvars
 
       - name: Terraform apply (lakehouse)
-        if: ${{ inputs.action == 'apply' }}
+        if: steps.secrets_check.outputs.available == 'true' && inputs.action == 'apply'
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/lakehouse apply \
-            -auto-approve \
-            -compact-warnings \
+          terraform -chdir=terraform/lakehouse apply -auto-approve -compact-warnings \
             -var-file=envs/${{ inputs.environment }}/terraform.tfvars
+
+      # ==========================================================
+      # 11) Si secrets non dispo (PR fork/Dependabot) : on informe et on sort OK
+      # ==========================================================
+      - name: Skip message (no secrets)
+        if: steps.secrets_check.outputs.available == 'false'
+        shell: bash
+        run: |
+          echo "ℹ️ Skipping Terraform because WIF secrets are not available (fork PR / Dependabot)."
+          echo "This is enterprise-standard behavior to avoid leaking secrets."

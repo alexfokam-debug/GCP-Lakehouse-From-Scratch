@@ -1,4 +1,4 @@
-name: Terraform DEV
+name: Terraform - DEV
 
 on:
   push:
@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "plan ou apply"
+        description: "plan or apply"
         required: true
         default: "plan"
         type: choice
@@ -24,18 +24,20 @@ permissions:
   id-token: write
 
 jobs:
-  # ---- PLAN sur PR / push
+  # Sur push main + PR : on fait un PLAN
   plan:
     if: ${{ github.event_name != 'workflow_dispatch' }}
     uses: ./.github/workflows/terraform-reusable.yml
     with:
       environment: dev
       action: plan
+    secrets: inherit  # ✅ ENTERPRISE: récupère les secrets de l'Environment dev
 
-  # ---- PLAN/APPLY manuel via workflow_dispatch
+  # Manuel : plan/apply
   manual:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     uses: ./.github/workflows/terraform-reusable.yml
     with:
       environment: dev
       action: ${{ inputs.action }}
+    secrets: inherit

@@ -1,18 +1,10 @@
-<<<<<<< HEAD
-name: Terraform STAGING - plan
-=======
-name: Terraform STAGING
->>>>>>> f2b7444 (test: trigger plan)
+name: Terraform - STAGING
 
 on:
-  pull_request:
-    paths:
-      - "terraform/**"
-      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
       action:
-        description: "plan ou apply"
+        description: "plan or apply"
         required: true
         default: "plan"
         type: choice
@@ -23,136 +15,9 @@ permissions:
   id-token: write
 
 jobs:
-  plan:
-    if: ${{ github.event_name != 'workflow_dispatch' }}
-    uses: ./.github/workflows/terraform-reusable.yml
-    with:
-      environment: staging
-      action: plan
-
-<<<<<<< HEAD
-    defaults:
-      run:
-        working-directory: terraform
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # 0) Resolve config (vars preferred, secrets fallback)
-      - name: Precheck - resolve config (vars -> secrets fallback)
-        id: cfg
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "event_name=${GITHUB_EVENT_NAME}"
-          echo "ref=${GITHUB_REF}"
-          echo "actor=${GITHUB_ACTOR}"
-          echo "repo=${GITHUB_REPOSITORY}"
-
-          PROJECT_ID="${{ vars.GCP_PROJECT_ID }}"
-          WIF_PROVIDER="${{ vars.GCP_WIF_PROVIDER }}"
-          WIF_SA="${{ vars.GCP_WIF_SERVICE_ACCOUNT }}"
-
-          if [[ -z "${PROJECT_ID}" ]]; then PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"; fi
-          if [[ -z "${WIF_PROVIDER}" ]]; then WIF_PROVIDER="${{ secrets.GCP_WIF_PROVIDER }}"; fi
-          if [[ -z "${WIF_SA}" ]]; then WIF_SA="${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}"; fi
-
-          [[ -n "${PROJECT_ID}" ]] || (echo "❌ Missing config: GCP_PROJECT_ID (vars or secrets)" && exit 1)
-          [[ -n "${WIF_PROVIDER}" ]] || (echo "❌ Missing config: GCP_WIF_PROVIDER (vars or secrets)" && exit 1)
-          [[ -n "${WIF_SA}" ]] || (echo "❌ Missing config: GCP_WIF_SERVICE_ACCOUNT (vars or secrets)" && exit 1)
-
-          echo "Resolved OK (masked in logs by GitHub)."
-
-          {
-            echo "project_id=${PROJECT_ID}"
-            echo "wif_provider=${WIF_PROVIDER}"
-            echo "wif_sa=${WIF_SA}"
-          } >> "$GITHUB_OUTPUT"
-
-      # 1) Auth WIF
-      - name: Authenticate to Google Cloud (WIF)
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ steps.cfg.outputs.wif_provider }}
-          service_account: ${{ steps.cfg.outputs.wif_sa }}
-          create_credentials_file: true
-          export_environment_variables: true
-          token_format: "access_token"
-
-      # 2) Setup gcloud
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ steps.cfg.outputs.project_id }}
-
-      # 3) Identity & permission check (safe)
-      - name: Debug - identity & permissions (safe)
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-NOT_SET}"
-
-          echo "== gcloud auth list =="
-          gcloud auth list
-
-          echo "== tokeninfo (email/aud/azp) =="
-          ACCESS_TOKEN="$(gcloud auth print-access-token)"
-          curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=${ACCESS_TOKEN}" | jq -r '.email,.aud,.azp'
-
-          echo "== project describe (permission check) =="
-          gcloud projects describe "${{ steps.cfg.outputs.project_id }}" --format="value(projectId)" >/dev/null
-          echo "OK: can read project"
-
-      # 4) Terraform tooling
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.7.5
-
-      - name: Terraform fmt
-        run: terraform fmt -check -recursive
-
-      - name: Terraform init (staging backend)
-        run: terraform init -backend-config=envs/staging/backend.hcl -reconfigure
-
-      - name: Terraform validate
-        run: terraform validate
-
-      # 5) Plan saved as plan.out
-      - name: Terraform plan (staging) -> plan.out
-        env:
-          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
-          GOOGLE_PROJECT: ${{ steps.cfg.outputs.project_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          terraform plan -var-file=envs/staging/terraform.tfvars -out=plan.out
-          echo "Saved the plan to: plan.out"
-          terraform show -no-color plan.out | sed -n '1,120p'
-
-      # 6) Job summary
-      - name: Summary
-        if: always()
-        shell: bash
-        run: |
-          {
-            echo "## Terraform staging plan"
-            echo ""
-            echo "- Project: \`${{ steps.cfg.outputs.project_id }}\`"
-            echo "- Repo: \`${GITHUB_REPOSITORY}\`"
-            echo "- Ref: \`${GITHUB_REF}\`"
-            echo "- Actor: \`${GITHUB_ACTOR}\`"
-            echo ""
-            echo "> If you still see 'has moved to ...[0]' in the plan, add moved blocks in terraform/modules/iam/moved.tf."
-          } >> "$GITHUB_STEP_SUMMARY"
-=======
-  manual:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+  run:
     uses: ./.github/workflows/terraform-reusable.yml
     with:
       environment: staging
       action: ${{ inputs.action }}
->>>>>>> f2b7444 (test: trigger plan)
+    secrets: inherit

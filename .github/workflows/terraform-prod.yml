@@ -1,10 +1,10 @@
-name: Terraform PROD
+name: Terraform - PROD
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "plan ou apply"
+        description: "plan or apply"
         required: true
         default: "plan"
         type: choice
@@ -15,8 +15,9 @@ permissions:
   id-token: write
 
 jobs:
-  manual:
+  run:
     uses: ./.github/workflows/terraform-reusable.yml
     with:
       environment: prod
       action: ${{ inputs.action }}
+    secrets: inherit
