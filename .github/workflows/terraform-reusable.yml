@@ -184,6 +184,38 @@ jobs:
 
           echo "== If needed, list buckets containing 'terraform' (best effort) =="
           gcloud storage buckets list --project "${PROJECT_ID}" --format="value(name)" | grep -i terraform || true
+          
+
+      # ==========================================================
+      # Normalize / sanitize vars
+      # - supprime CR/LF
+      # - trim espaces
+      # - fail fast si vide
+      # ==========================================================
+      - name: Sanitize inputs (PROJECT_ID / TF_BUCKET)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Source de vérité = GitHub vars (pas les env déjà polluées)
+          PROJECT_ID_CLEAN="$(printf '%s' "${{ vars.GCP_PROJECT_ID_DEV }}" | tr -d '\r\n' | xargs)"
+          TF_BUCKET_CLEAN="$(printf '%s' "${{ vars.TF_STATE_BUCKET_DEV }}" | tr -d '\r\n' | xargs)"
+
+          if [[ -z "${PROJECT_ID_CLEAN}" ]]; then
+            echo "❌ PROJECT_ID empty after sanitize"
+            exit 1
+          fi
+          if [[ -z "${TF_BUCKET_CLEAN}" ]]; then
+            echo "❌ TF_BUCKET empty after sanitize"
+            exit 1
+          fi
+
+          echo "PROJECT_ID=${PROJECT_ID_CLEAN}" >> "$GITHUB_ENV"
+          echo "TF_BUCKET=${TF_BUCKET_CLEAN}"   >> "$GITHUB_ENV"
+
+          echo "✅ PROJECT_ID='${PROJECT_ID_CLEAN}'"
+          echo "✅ TF_BUCKET='${TF_BUCKET_CLEAN}'"
+          echo "TF_BUCKET_LEN=$(printf '%s' "${TF_BUCKET_CLEAN}" | wc -c | tr -d ' ')"
 
       # ==========================================================
       # 7) Backend sanity (state bucket) : fail fast
