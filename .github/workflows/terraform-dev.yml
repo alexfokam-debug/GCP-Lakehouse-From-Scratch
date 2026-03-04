@@ -32,7 +32,7 @@ jobs:
   plan:
     if: ${{ github.event_name != 'workflow_dispatch' }}
     uses: ./.github/workflows/terraform-reusable.yml
-    environment: dev
+    environment: dev            # ✅ INDISPENSABLE (injecte vars+secrets env dev)
     with:
       environment: dev
       action: plan
@@ -51,7 +51,7 @@ jobs:
     secrets: inherit
 
   # ==========================================================
-  # 3) Manuel APPLY (uniquement sur main)
+  # 3) Manuel APPLY (seulement sur main)
   # ==========================================================
   manual_apply:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && github.ref == 'refs/heads/main' }}
