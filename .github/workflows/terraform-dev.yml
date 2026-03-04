@@ -6,10 +6,12 @@ on:
     paths:
       - "terraform/**"
       - ".github/workflows/**"
+
   pull_request:
     paths:
       - "terraform/**"
       - ".github/workflows/**"
+
   workflow_dispatch:
     inputs:
       action:
@@ -24,20 +26,38 @@ permissions:
   id-token: write
 
 jobs:
-  # Sur push main + PR : on fait un PLAN
+  # ==========================================================
+  # 1) PLAN auto (PR + push main)
+  # ==========================================================
   plan:
     if: ${{ github.event_name != 'workflow_dispatch' }}
     uses: ./.github/workflows/terraform-reusable.yml
+    environment: dev
     with:
       environment: dev
       action: plan
-    secrets: inherit  # ✅ ENTERPRISE: récupère les secrets de l'Environment dev
+    secrets: inherit
 
-  # Manuel : plan/apply
-  manual:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+  # ==========================================================
+  # 2) Manuel PLAN
+  # ==========================================================
+  manual_plan:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'plan' }}
     uses: ./.github/workflows/terraform-reusable.yml
+    environment: dev
     with:
       environment: dev
-      action: ${{ inputs.action }}
+      action: plan
+    secrets: inherit
+
+  # ==========================================================
+  # 3) Manuel APPLY (uniquement sur main)
+  # ==========================================================
+  manual_apply:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && github.ref == 'refs/heads/main' }}
+    uses: ./.github/workflows/terraform-reusable.yml
+    environment: dev
+    with:
+      environment: dev
+      action: apply
     secrets: inherit
