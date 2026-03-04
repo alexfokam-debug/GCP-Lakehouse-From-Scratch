@@ -6,12 +6,10 @@ on:
     paths:
       - "terraform/**"
       - ".github/workflows/**"
-
   pull_request:
     paths:
       - "terraform/**"
       - ".github/workflows/**"
-
   workflow_dispatch:
     inputs:
       action:
@@ -26,38 +24,28 @@ permissions:
   id-token: write
 
 jobs:
-  # ==========================================================
-  # 1) PLAN auto (PR + push main)
-  # ==========================================================
+  # PLAN auto (PR + push main)
   plan:
     if: ${{ github.event_name != 'workflow_dispatch' }}
     uses: ./.github/workflows/terraform-reusable.yml
-    environment: dev            # ✅ INDISPENSABLE (injecte vars+secrets env dev)
     with:
       environment: dev
       action: plan
-    secrets: inherit
 
-  # ==========================================================
-  # 2) Manuel PLAN
-  # ==========================================================
-  manual_plan:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'plan' }}
+    # ✅ IMPORTANT: mapping explicite des secrets
+    secrets:
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_DEV }}
+      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA_DEV }}
+
+  # Manuel : plan/apply
+  manual:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     uses: ./.github/workflows/terraform-reusable.yml
-    environment: dev
     with:
       environment: dev
-      action: plan
-    secrets: inherit
+      action: ${{ inputs.action }}
 
-  # ==========================================================
-  # 3) Manuel APPLY (seulement sur main)
-  # ==========================================================
-  manual_apply:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && github.ref == 'refs/heads/main' }}
-    uses: ./.github/workflows/terraform-reusable.yml
-    environment: dev
-    with:
-      environment: dev
-      action: apply
-    secrets: inherit
+    # ✅ IMPORTANT: mapping explicite des secrets
+    secrets:
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_DEV }}
+      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA_DEV }}
