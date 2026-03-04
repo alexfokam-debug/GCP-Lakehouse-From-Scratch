@@ -60,3 +60,4 @@ bootstrap_ci_iam = false
 manage_wif = true
 
 # Optionnel (à éviter sauf besoin explicite)
+allow_pull_request       = true

@@ -1,0 +1,315 @@
+name: Terraform - Reusable (enterprise)
+
+# =============================================================================
+# WORKFLOW REUTILISABLE (MOTEUR)
+# -----------------------------------------------------------------------------
+# - Appelé par dev/staging/prod via "uses:"
+# - Enterprise-grade :
+#   * OIDC GitHub -> WIF GCP (sans clé JSON)
+#   * SKIP proprement si secrets non injectés (fork PR / dependabot)
+#   * Sanitize PROJECT_ID / TF_BUCKET (anti CR/LF)
+#   * terraform fmt UNIQUEMENT sur *.tf (pas sur tfvars)
+# =============================================================================
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "GitHub environment (dev|staging|prod)"
+        required: true
+        type: string
+      action:
+        description: "Terraform action (plan|apply)"
+        required: true
+        type: string
+
+    # IMPORTANT :
+    # - On déclare explicitement les secrets attendus,
+    # - sinon "auth@v2" peut se lancer avec des inputs vides -> erreur.
+    secrets:
+      GCP_WIF_PROVIDER:
+        required: false
+      GCP_WIF_SA:
+        required: false
+
+permissions:
+  contents: read
+  id-token: write  # OBLIGATOIRE pour l'OIDC GitHub -> WIF GCP
+
+jobs:
+  terraform:
+    name: Terraform ${{ inputs.action }} (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+
+    # Attache ce job au GitHub Environment (dev/staging/prod).
+    # => injecte vars + secrets de l'environment
+    # => staging/prod peuvent avoir des "required reviewers"
+    environment: ${{ inputs.environment }}
+
+    # Vars "communes" (non sensibles)
+    # Settings → Environments → <env> → Variables
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      TF_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+
+    steps:
+      # ==========================================================
+      # 0) Checkout
+      # ==========================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ==========================================================
+      # 1) Context debug
+      # ==========================================================
+      - name: Print context (debug)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== Context =="
+          echo "event_name=${GITHUB_EVENT_NAME}"
+          echo "ref=${GITHUB_REF}"
+          echo "actor=${GITHUB_ACTOR}"
+          echo "repo=${GITHUB_REPOSITORY}"
+          echo "inputs.environment=${{ inputs.environment }}"
+          echo "inputs.action=${{ inputs.action }}"
+
+      # ==========================================================
+      # 2) Fail fast : vars obligatoires
+      # ==========================================================
+      - name: Validate Environment Variables (fail fast)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${PROJECT_ID:-}" ]]; then
+            echo "❌ Missing vars.GCP_PROJECT_ID in GitHub Environment '${{ inputs.environment }}'"
+            exit 1
+          fi
+
+          if [[ -z "${TF_BUCKET:-}" ]]; then
+            echo "❌ Missing vars.TF_STATE_BUCKET in GitHub Environment '${{ inputs.environment }}'"
+            exit 1
+          fi
+
+          echo "✅ PROJECT_ID(raw)='${PROJECT_ID}'"
+          echo "✅ TF_BUCKET(raw)='${TF_BUCKET}'"
+
+      # ==========================================================
+      # 3) Sanitize inputs (anti CR/LF + trim)
+      # ==========================================================
+      - name: Sanitize inputs (PROJECT_ID / TF_BUCKET)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT_ID_CLEAN="$(printf '%s' "${PROJECT_ID}" | tr -d '\r\n' | xargs)"
+          TF_BUCKET_CLEAN="$(printf '%s' "${TF_BUCKET}" | tr -d '\r\n' | xargs)"
+
+          if [[ -z "${PROJECT_ID_CLEAN}" ]]; then
+            echo "❌ PROJECT_ID empty after sanitize"
+            exit 1
+          fi
+          if [[ -z "${TF_BUCKET_CLEAN}" ]]; then
+            echo "❌ TF_BUCKET empty after sanitize"
+            exit 1
+          fi
+
+          echo "PROJECT_ID=${PROJECT_ID_CLEAN}" >> "$GITHUB_ENV"
+          echo "TF_BUCKET=${TF_BUCKET_CLEAN}"   >> "$GITHUB_ENV"
+
+          echo "✅ PROJECT_ID(clean)='${PROJECT_ID_CLEAN}'"
+          echo "✅ TF_BUCKET(clean)='${TF_BUCKET_CLEAN}'"
+
+      # ==========================================================
+      # 4) Secrets check
+      # ----------------------------------------------------------
+      # Fork PR / Dependabot => secrets vides => on SKIP.
+      # ==========================================================
+      - name: Detect secrets availability
+        id: secrets_check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${{ secrets.GCP_WIF_PROVIDER }}" || -z "${{ secrets.GCP_WIF_SA }}" ]]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ WIF secrets NOT available (fork PR / dependabot / env not attached)."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "✅ WIF secrets available."
+          fi
+
+      # ==========================================================
+      # 5) Auth GCP via WIF (SEULEMENT si secrets dispo)
+      # ==========================================================
+      - name: Authenticate to Google Cloud (WIF)
+        if: steps.secrets_check.outputs.available == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SA }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # ==========================================================
+      # 6) Setup gcloud (après auth)
+      # ==========================================================
+      - name: Setup gcloud
+        if: steps.secrets_check.outputs.available == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      # ==========================================================
+      # 7) Force project context
+      # ==========================================================
+      - name: Force project context
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CLOUDSDK_CORE_PROJECT=${PROJECT_ID}" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_PROJECT=${PROJECT_ID}"  >> "$GITHUB_ENV"
+          echo "GOOGLE_PROJECT=${PROJECT_ID}"        >> "$GITHUB_ENV"
+          echo "GCP_PROJECT=${PROJECT_ID}"           >> "$GITHUB_ENV"
+          echo "Forced PROJECT_ID=${PROJECT_ID}"
+
+      # ==========================================================
+      # 8) Debug identité (best effort)
+      # ==========================================================
+      - name: Verify identity (debug, best effort)
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -u
+          echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-<empty>}"
+          gcloud config list || true
+          gcloud auth list || true
+          gcloud projects describe "${PROJECT_ID}" >/dev/null && echo "OK: can read project" || true
+
+      # ==========================================================
+      # 9) Backend sanity (bucket state)
+      # ==========================================================
+      - name: Backend sanity (GCS state) - fail fast
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud storage buckets describe "gs://${TF_BUCKET}" --format="value(name,location,storage_url)"
+          gcloud storage ls "gs://${TF_BUCKET}/" >/dev/null
+          echo "OK: bucket reachable: gs://${TF_BUCKET}"
+
+      # ==========================================================
+      # 10) Setup Terraform
+      # ==========================================================
+      - name: Setup Terraform
+        if: steps.secrets_check.outputs.available == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      # ==========================================================
+      # 11) FOUNDATION : fmt/init/validate/plan|apply
+      # ==========================================================
+      - name: Terraform fmt (foundation) - only *.tf
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd terraform/foundation
+          # ✅ robust: si aucun fichier, on ne crash pas
+          files=$(find . -type f -name "*.tf" -print)
+          if [[ -n "${files}" ]]; then
+            terraform fmt -check -recursive ${files}
+          else
+            echo "No *.tf files found (unexpected) - skipping fmt"
+          fi
+
+      - name: Terraform init (foundation)
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation init -reconfigure -lockfile=readonly \
+            -backend-config="bucket=${TF_BUCKET}" \
+            -backend-config="prefix=foundation/${{ inputs.environment }}"
+
+      - name: Terraform validate (foundation)
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: terraform -chdir=terraform/foundation validate
+
+      - name: Terraform plan (foundation)
+        if: steps.secrets_check.outputs.available == 'true' && inputs.action == 'plan'
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation plan -compact-warnings \
+            -var-file=envs/${{ inputs.environment }}/terraform.tfvars
+
+      - name: Terraform apply (foundation)
+        if: steps.secrets_check.outputs.available == 'true' && inputs.action == 'apply'
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/foundation apply -auto-approve -compact-warnings \
+            -var-file=envs/${{ inputs.environment }}/terraform.tfvars
+
+      # ==========================================================
+      # 12) LAKEHOUSE : fmt/init/validate/plan|apply
+      # ==========================================================
+      - name: Terraform fmt (lakehouse) - only *.tf
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd terraform/lakehouse
+          files=$(find . -type f -name "*.tf" -print)
+          if [[ -n "${files}" ]]; then
+            terraform fmt -check -recursive ${files}
+          else
+            echo "No *.tf files found (unexpected) - skipping fmt"
+          fi
+
+      - name: Terraform init (lakehouse)
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse init -reconfigure -lockfile=readonly \
+            -backend-config="bucket=${TF_BUCKET}" \
+            -backend-config="prefix=lakehouse/${{ inputs.environment }}"
+
+      - name: Terraform validate (lakehouse)
+        if: steps.secrets_check.outputs.available == 'true'
+        shell: bash
+        run: terraform -chdir=terraform/lakehouse validate
+
+      - name: Terraform plan (lakehouse)
+        if: steps.secrets_check.outputs.available == 'true' && inputs.action == 'plan'
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse plan -compact-warnings \
+            -var-file=envs/${{ inputs.environment }}/terraform.tfvars
+
+      - name: Terraform apply (lakehouse)
+        if: steps.secrets_check.outputs.available == 'true' && inputs.action == 'apply'
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/lakehouse apply -auto-approve -compact-warnings \
+            -var-file=envs/${{ inputs.environment }}/terraform.tfvars
+
+      # ==========================================================
+      # 13) No-secrets mode : info + exit 0
+      # ==========================================================
+      - name: Skip message (no secrets)
+        if: steps.secrets_check.outputs.available == 'false'
+        shell: bash
+        run: |
+          echo "ℹ️ Skipping Terraform because WIF secrets are not available (fork PR / Dependabot)."
+          echo "Enterprise-standard behavior: avoid leaking secrets."

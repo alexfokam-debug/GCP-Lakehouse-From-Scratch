@@ -1,4 +1,4 @@
-name: Terraform - DEV
+name: Terraform - PROD
 
 on:
   push:
@@ -29,23 +29,23 @@ jobs:
     if: ${{ github.event_name != 'workflow_dispatch' }}
     uses: ./.github/workflows/terraform-reusable.yml
     with:
-      environment: dev
+      environment: prod
       action: plan
 
-    # ✅ IMPORTANT: mapping explicite des secrets
+    # ✅ Mapping explicite (comme DEV)
     secrets:
-      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_DEV }}
-      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA_DEV }}
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_PROD }}
+      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA_PROD }}
 
   # Manuel : plan/apply
   manual:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     uses: ./.github/workflows/terraform-reusable.yml
     with:
-      environment: dev
+      environment: prod
       action: ${{ inputs.action }}
 
-    # ✅ IMPORTANT: mapping explicite des secrets
+    # ✅ Mapping explicite (comme DEV)
     secrets:
-      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_DEV }}
-      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA_DEV }}
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_PROD }}
+      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA_PROD }}

@@ -101,3 +101,13 @@ variable "enable_github_cicd_wif_pool_admin" {
   type        = bool
   default     = false
 }
+# Autorise les exécutions GitHub Actions venant des PR
+# (PR -> ref = refs/pull/<id>/merge)
+# En entreprise :
+# - dev/staging : true (plan OK sur PR)
+# - prod : souvent false pour bloquer toute auth depuis PR sur prod
+variable "allow_pull_request" {
+  type        = bool
+  description = "Allow GitHub PR refs (refs/pull/*) in WIF attribute_condition."
+  default     = true
+}
