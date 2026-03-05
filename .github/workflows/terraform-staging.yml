@@ -32,10 +32,10 @@ jobs:
       environment: staging
       action: plan
 
-    # ✅ Mapping explicite (comme DEV)
+    # Mapping explicite (comme DEV)
     secrets:
-      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
-      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA_STAGING }}
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA }}
 
   # Manuel : plan/apply
   manual:
@@ -45,7 +45,7 @@ jobs:
       environment: staging
       action: ${{ inputs.action }}
 
-    # ✅ Mapping explicite (comme DEV)
+    # Mapping explicite (comme DEV)
     secrets:
-      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER_STAGING }}
-      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA_STAGING }}
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+      GCP_WIF_SA: ${{ secrets.GCP_WIF_SA }}
