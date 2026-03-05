@@ -35,17 +35,17 @@ jobs:
           echo "actor=${GITHUB_ACTOR}"
           echo "repo=${GITHUB_REPOSITORY}"
 
-          PROJECT_ID="${{ vars.GCP_PROJECT_ID_STAGING }}"
-          WIF_PROVIDER="${{ vars.GCP_WIF_PROVIDER_STAGING }}"
-          WIF_SA="${{ vars.GCP_WIF_SERVICE_ACCOUNT_STAGING }}"
+          PROJECT_ID="${{ vars.GCP_PROJECT_ID }}"
+          WIF_PROVIDER="${{ vars.GCP_WIF_PROVIDER }}"
+          WIF_SA="${{ vars.GCP_WIF_SERVICE_ACCOUNT }}"
 
-          if [[ -z "${PROJECT_ID}" ]]; then PROJECT_ID="${{ secrets.GCP_PROJECT_ID_STAGING }}"; fi
-          if [[ -z "${WIF_PROVIDER}" ]]; then WIF_PROVIDER="${{ secrets.GCP_WIF_PROVIDER_STAGING }}"; fi
-          if [[ -z "${WIF_SA}" ]]; then WIF_SA="${{ secrets.GCP_WIF_SERVICE_ACCOUNT_STAGING }}"; fi
+          if [[ -z "${PROJECT_ID}" ]]; then PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"; fi
+          if [[ -z "${WIF_PROVIDER}" ]]; then WIF_PROVIDER="${{ secrets.GCP_WIF_PROVIDER }}"; fi
+          if [[ -z "${WIF_SA}" ]]; then WIF_SA="${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}"; fi
 
-          [[ -n "${PROJECT_ID}" ]] || (echo "❌ Missing config: GCP_PROJECT_ID_STAGING (vars or secrets)" && exit 1)
-          [[ -n "${WIF_PROVIDER}" ]] || (echo "❌ Missing config: GCP_WIF_PROVIDER_STAGING (vars or secrets)" && exit 1)
-          [[ -n "${WIF_SA}" ]] || (echo "❌ Missing config: GCP_WIF_SERVICE_ACCOUNT_STAGING (vars or secrets)" && exit 1)
+          [[ -n "${PROJECT_ID}" ]] || (echo "❌ Missing config: GCP_PROJECT_ID (vars or secrets)" && exit 1)
+          [[ -n "${WIF_PROVIDER}" ]] || (echo "❌ Missing config: GCP_WIF_PROVIDER (vars or secrets)" && exit 1)
+          [[ -n "${WIF_SA}" ]] || (echo "❌ Missing config: GCP_WIF_SERVICE_ACCOUNT (vars or secrets)" && exit 1)
 
           echo "Resolved OK (masked in logs by GitHub)."
 
