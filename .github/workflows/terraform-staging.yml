@@ -1,4 +1,4 @@
-name: Terraform (staging) - plan
+name: Terraform Staging - plan
 
 on:
   push:
