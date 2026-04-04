@@ -1,0 +1,13 @@
+# =============================================================================
+# requirements.txt
+# -----------------------------------------------------------------------------
+# Dépendances Python nécessaires à la lecture GRIB2 côté Dataproc
+# =============================================================================
+
+pyyaml
+xarray
+cfgrib
+eccodes
+pandas
+pyarrow
+google-cloud-storage

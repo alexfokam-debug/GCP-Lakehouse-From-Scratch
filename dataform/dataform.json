@@ -1,0 +1,7 @@
+{
+  "defaultDatabase": "lakehouse-486419",
+  "defaultSchema": "analytics_dev",
+  "defaultLocation": "europe-west1",
+  "assertionSchema": "dataform_assertions",
+  "warehouse": "bigquery"
+}

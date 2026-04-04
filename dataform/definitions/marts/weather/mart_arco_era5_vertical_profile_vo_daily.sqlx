@@ -1,0 +1,72 @@
+config {
+  type: "view",
+  schema: "analytics_dev",
+  name: "mart_arco_era5_vertical_profile_vo_daily",
+  tags: ["weather", "arco", "mart"]
+}
+
+/*
+===============================================================================
+MART DATAFORM — DAILY SUMMARY ARCO ERA5 VORTICITY
+-------------------------------------------------------------------------------
+OBJECTIF
+-------------------------------------------------------------------------------
+Construire une vue analytics simple à partir du staging.
+
+Ici on veut agréger la vorticité relative moyenne :
+- par date d'observation
+- par niveau hybride
+
+Ce modèle montre la transition vers une logique plus analytique.
+===============================================================================
+*/
+
+WITH staging AS (
+
+  /*
+  ---------------------------------------------------------------------------
+  ETAPE 1 — LECTURE DU STAGING
+  ---------------------------------------------------------------------------
+  On part de la couche staging plutôt que de la source brute.
+  C’est une bonne pratique :
+  - meilleure lisibilité
+  - logique modulaire
+  - réutilisabilité
+  ---------------------------------------------------------------------------
+  */
+  SELECT *
+  FROM ${ref("stg_arco_era5_vertical_profile_vo")}
+
+),
+
+aggregated AS (
+
+  /*
+  ---------------------------------------------------------------------------
+  ETAPE 2 — AGREGER PAR JOUR ET NIVEAU
+  ---------------------------------------------------------------------------
+  On calcule ici :
+  - la moyenne de la vorticité
+  - le minimum
+  - le maximum
+  - le nombre d'observations
+
+  Cela donne une première vue analytique exploitable.
+  ---------------------------------------------------------------------------
+  */
+  SELECT
+    observation_date,
+    hybrid_level,
+    AVG(mean_relative_vorticity) AS avg_relative_vorticity,
+    MIN(mean_relative_vorticity) AS min_relative_vorticity,
+    MAX(mean_relative_vorticity) AS max_relative_vorticity,
+    COUNT(*) AS nb_records
+  FROM staging
+  GROUP BY
+    observation_date,
+    hybrid_level
+
+)
+
+SELECT *
+FROM aggregated

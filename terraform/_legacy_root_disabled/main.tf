@@ -534,8 +534,8 @@ module "iam" {
   bootstrap_ci_iam = var.bootstrap_ci_iam
 
   # Secret id (pas le full resource name)
-  git_token_secret_id = var.git_token_secret_id
-  manage_wif          = var.manage_wif
+  git_token_secret_id               = var.git_token_secret_id
+  manage_wif                        = var.manage_wif
   enable_github_cicd_wif_pool_admin = var.enable_github_cicd_wif_pool_admin
 }
 

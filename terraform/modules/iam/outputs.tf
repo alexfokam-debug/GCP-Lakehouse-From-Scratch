@@ -14,15 +14,14 @@
 # GitHub CI/CD (toujours créé)
 # =============================================================================
 output "github_cicd_sa_email" {
-  description = "Email du service account utilisé par GitHub Actions."
-  value       = google_service_account.github_cicd.email
+  description = "Email du service account GitHub CI/CD si WIF activé, sinon null."
+  value       = var.manage_wif ? google_service_account.github_cicd[0].email : null
 }
 
 output "github_wif_provider" {
-  description = "Nom complet du provider WIF GitHub (utilisé dans GitHub Actions)."
-  value       = try(google_iam_workload_identity_pool_provider.github[0].name, null)
+  description = "Nom complet du provider WIF GitHub si activé, sinon null."
+  value       = var.manage_wif ? google_iam_workload_identity_pool_provider.github[0].name : null
 }
-
 # =============================================================================
 # Lakehouse runtimes
 # -----------------------------------------------------------------------------

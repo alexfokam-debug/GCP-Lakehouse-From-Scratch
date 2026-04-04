@@ -1,0 +1,46 @@
+# =============================================================================
+# WORKFLOW SETTINGS — DATAFORM
+# -----------------------------------------------------------------------------
+# OBJECTIF
+# -----------------------------------------------------------------------------
+# Ce fichier centralise les paramètres d'exécution du projet Dataform.
+#
+# Il permet d'avoir une configuration claire et stable pour :
+# - le projet BigQuery cible
+# - la région
+# - le repository Dataform
+# - la branche Git
+# - le dataset par défaut
+#
+# BONNE PRATIQUE
+# -----------------------------------------------------------------------------
+# On garde ici uniquement les paramètres "de pilotage" Dataform.
+# La logique métier reste dans les fichiers SQLX.
+# =============================================================================
+
+defaultProject: "lakehouse-486419"
+defaultLocation: "europe-west1"
+defaultDataset: "analytics_dev"
+defaultAssertionDataset: "dataform_assertions"
+
+# -----------------------------------------------------------------------------
+# Paramètres logiques du repository Dataform
+# -----------------------------------------------------------------------------
+dataformCoreVersion: "3.0.0"
+
+# -----------------------------------------------------------------------------
+# Suffixe optionnel pour les environnements
+# Ici vide car ton environnement dev est déjà intégré dans les datasets
+# (analytics_dev, curated_ext_dev, etc.)
+# -----------------------------------------------------------------------------
+projectSuffix: ""
+
+# -----------------------------------------------------------------------------
+# Variables projet si tu veux les utiliser plus tard dans les SQLX
+# Exemple : dataform.projectConfig.vars.env
+# -----------------------------------------------------------------------------
+vars:
+  env: "dev"
+  domain: "weather"
+  source_dataset: "curated_ext_dev"
+  target_dataset: "analytics_dev"

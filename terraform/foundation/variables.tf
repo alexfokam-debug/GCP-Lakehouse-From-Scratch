@@ -111,3 +111,100 @@ variable "allow_pull_request" {
   description = "Allow GitHub PR refs (refs/pull/*) in WIF attribute_condition."
   default     = true
 }
+
+################################################################################
+# VARIABLES - ACCÈS UTILISATEUR HUMAIN POUR BUILD LOCAL
+################################################################################
+
+variable "human_user_email" {
+  description = "Adresse email de l'utilisateur humain à autoriser pour Cloud Build / Artifact Registry"
+  type        = string
+  default     = null
+}
+
+variable "enable_human_build_access" {
+  description = "Active les rôles projet nécessaires à l'utilisateur humain pour les builds locaux"
+  type        = bool
+  default     = false
+}
+
+################################################################################
+# VARIABLES - CLOUD BUILD RUNTIME SERVICE ACCOUNT
+################################################################################
+
+variable "cloud_build_service_account_email" {
+  description = "Service account utilisé par Cloud Build pour exécuter les builds"
+  type        = string
+  default     = null
+}
+
+variable "enable_lakehouse_runtimes" {
+  description = "Active les runtimes IAM Dataform/Dataproc"
+  type        = bool
+  default     = false
+}
+
+variable "curated_dataset_id" {
+  type    = string
+  default = null
+}
+
+variable "analytics_dataset_id" {
+  type    = string
+  default = null
+}
+
+variable "raw_external_dataset_id" {
+  type    = string
+  default = null
+}
+
+variable "curated_iceberg_dataset_id" {
+  type    = string
+  default = null
+}
+
+variable "tmp_dataset_id" {
+  type    = string
+  default = null
+}
+
+variable "enable_tmp_dataset" {
+  type    = bool
+  default = true
+}
+
+variable "enterprise_dataset_id" {
+  type    = string
+  default = null
+}
+
+variable "raw_bucket_name" {
+  type    = string
+  default = null
+}
+
+variable "curated_bucket_name" {
+  type    = string
+  default = null
+}
+
+variable "iceberg_bucket_name" {
+  type    = string
+  default = null
+}
+
+variable "dataproc_temp_bucket_name" {
+  type    = string
+  default = null
+}
+
+variable "scripts_bucket_name" {
+  type    = string
+  default = null
+}
+
+variable "enable_cloud_build_runtime_access" {
+  type    = bool
+  default = false
+}

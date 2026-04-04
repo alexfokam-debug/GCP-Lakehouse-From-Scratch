@@ -60,4 +60,18 @@ bootstrap_ci_iam = false
 manage_wif = true
 
 # Optionnel (à éviter sauf besoin explicite)
-allow_pull_request       = true
+allow_pull_request = true
+
+# ---------------------------------------------------------------------------
+# Accès utilisateur humain pour build local (Cloud Build / Artifact Registry)
+# ---------------------------------------------------------------------------
+enable_human_build_access = true
+human_user_email          = "alexbertrand.takoukamfokam@mel.lincoln.fr"
+
+# ---------------------------------------------------------------------------
+# Service account utilisé par Cloud Build
+# ---------------------------------------------------------------------------
+enable_cloud_build_runtime_access = true
+cloud_build_service_account_email = "518653594867-compute@developer.gserviceaccount.com"
+
+enable_lakehouse_runtimes = false

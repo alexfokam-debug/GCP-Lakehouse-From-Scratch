@@ -60,13 +60,30 @@ resource "google_project_service" "services" {
     "secretmanager.googleapis.com",
     "dataproc.googleapis.com",
     "compute.googleapis.com",
+    "artifactregistry.googleapis.com",
+    "cloudbuild.googleapis.com",
   ])
 
   project            = var.project_id
   service            = each.value
   disable_on_destroy = false
 }
+# =============================================================================
+# ATTENTE DE PROPAGATION APRÈS ACTIVATION DE L'API ARTIFACT REGISTRY
+# -----------------------------------------------------------------------------
+# Pourquoi ?
+# GCP peut répondre "SERVICE_DISABLED" pendant quelques secondes après
+# l'activation effective de l'API.
+#
+# Donc on force une petite temporisation avant de créer le repository.
+# =============================================================================
+resource "time_sleep" "wait_artifact_registry_api" {
+  depends_on = [
+    google_project_service.services["artifactregistry.googleapis.com"]
+  ]
 
+  create_duration = "45s"
+}
 # =============================================================================
 # 2) LABELS PROJET (FinOps / gouvernance)
 # -----------------------------------------------------------------------------
@@ -91,26 +108,48 @@ module "project_labels" {
 # =============================================================================
 # 3) IAM / WIF / CI Bootstrap (Module IAM)
 # -----------------------------------------------------------------------------
-# Objectif :
-# - Créer / gérer la partie “security & access” (CI/CD GitHub, Dataform, Dataproc)
-# - Centraliser l’IAM pour éviter les doublons au root et le drift
-
-# Note clé :
-# Dans ton root initial, ton module IAM recevait des buckets/datasets issus
-# de lakehouse. Ça crée une dépendance FOUNDATION -> LAKEHOUSE.
+# OBJECTIF
+# -----------------------------------------------------------------------------
+# Centraliser dans un seul module :
+# - l'IAM GitHub / WIF
+# - le bootstrap CI/CD
+# - les accès humains locaux (Cloud Build / Artifact Registry)
+# - les accès du runtime Cloud Build
 #
-# Pour respecter la séparation :
-# - FOUNDATION ne doit pas avoir besoin des buckets/datasets.
-# - Donc dans foundation, on active UNIQUEMENT la partie WIF/CI + accès secret/backend,
-#   et on laisse les bindings bucket/datasets au lakehouse.
+# IMPORTANT
+# -----------------------------------------------------------------------------
+# Ce module IAM est capable de gérer deux modes :
 #
-# => Concrètement :
-# - Dans ton module IAM, il faut supporter un mode “foundation_only”
-#   où il ne requiert pas raw_bucket_name, curated_dataset_id, etc.
+# (A) mode FOUNDATION
+#     -> gère uniquement :
+#        - GitHub WIF
+#        - CI bootstrap
+#        - accès build local / Cloud Build
 #
-# Si tu ne veux pas modifier le module tout de suite :
-# - Tu peux mettre IAM dans lakehouse temporairement,
-# - ou bien passer des strings dummy et désactiver les bindings via flags.
+# (B) mode LAKEHOUSE RUNTIME
+#     -> gère en plus :
+#        - runtimes Dataform
+#        - runtimes Dataproc
+#        - bindings IAM sur datasets et buckets data
+#
+# DANS CE ROOT MODULE "foundation" :
+# on veut rester en mode FOUNDATION.
+#
+# Donc :
+# enable_lakehouse_runtimes doit être FALSE ici.
+#
+# Pourquoi ?
+# - foundation ne doit pas dépendre des objets data
+# - foundation ne doit pas embarquer les datasets et buckets métiers
+# - la couche data doit vivre dans le root module lakehouse
+#
+# BONNE PRATIQUE
+# -----------------------------------------------------------------------------
+# On conserve malgré tout le passage des variables datasets/buckets :
+# - cela garde le bloc homogène
+# - cela évite de réécrire le module plus tard
+# - mais elles ne seront PAS consommées tant que
+#   enable_lakehouse_runtimes = false
 # =============================================================================
 
 ###############################################################################
@@ -121,30 +160,139 @@ module "iam" {
   source = "../modules/iam"
 
   # ---------------------------------------------------------------------------
-  # Common
+  # (1) COMMON
+  # ---------------------------------------------------------------------------
+  # project_id :
+  #   projet GCP cible sur lequel on applique les droits IAM
+  #
+  # environment :
+  #   environnement logique (dev / staging / prod)
   # ---------------------------------------------------------------------------
   project_id  = var.project_id
   environment = var.environment
 
-
   # ---------------------------------------------------------------------------
-  # GitHub / WIF
+  # (2) GITHUB / WIF
+  # ---------------------------------------------------------------------------
+  # github_repository :
+  #   dépôt GitHub autorisé à s'authentifier via WIF
+  #
+  # manage_wif :
+  #   true  -> Terraform gère pool + provider WIF
+  #   false -> WIF géré ailleurs
+  #
+  # enable_github_cicd_wif_pool_admin :
+  #   option avancée pour donner plus de droits au SA GitHub CI/CD sur le pool
   # ---------------------------------------------------------------------------
   github_repository                 = var.github_repository
   manage_wif                        = var.manage_wif
   enable_github_cicd_wif_pool_admin = var.enable_github_cicd_wif_pool_admin
 
   # ---------------------------------------------------------------------------
-  # CI bootstrap (backend state bucket uniquement)
+  # (3) CI BOOTSTRAP
+  # ---------------------------------------------------------------------------
+  # bootstrap_ci_iam :
+  #   true  -> donne les droits bootstrap CI/CD
+  #   false -> mode sécurisé, pas de bootstrap automatique
+  #
+  # tf_state_bucket_name :
+  #   bucket GCS utilisé pour le remote state Terraform
   # ---------------------------------------------------------------------------
   bootstrap_ci_iam     = var.bootstrap_ci_iam
   tf_state_bucket_name = var.tf_state_bucket_name
 
   # ---------------------------------------------------------------------------
-  # 🔥 MODE FOUNDATION (TRÈS IMPORTANT)
+  # (4) ACTIVATION DES RUNTIMES LAKEHOUSE
   # ---------------------------------------------------------------------------
-  enable_lakehouse_runtimes = false
+  # TRÈS IMPORTANT :
+  # Ici, dans FOUNDATION, on doit laisser cette valeur à FALSE.
+  #
+  # Cela permet :
+  # - de garder le module compatible avec le mode lakehouse
+  # - sans activer ici les ressources Dataform / Dataproc runtime
+  #
+  # Recommandation :
+  # - piloter la valeur via la variable root
+  # - et mettre false dans foundation/envs/dev/terraform.tfvars
+  # ---------------------------------------------------------------------------
+  enable_lakehouse_runtimes = var.enable_lakehouse_runtimes
+
+  # ---------------------------------------------------------------------------
+  # (5) DATASETS
+  # ---------------------------------------------------------------------------
+  # Ces variables restent câblées au module pour garder une interface stable.
+  #
+  # En mode FOUNDATION :
+  # - elles ne doivent pas être utilisées
+  # - elles peuvent rester nulles / non renseignées si le module IAM
+  #   est bien protégé par enable_lakehouse_runtimes = false
+  # ---------------------------------------------------------------------------
+  curated_dataset_id         = var.curated_dataset_id
+  analytics_dataset_id       = var.analytics_dataset_id
+  raw_external_dataset_id    = var.raw_external_dataset_id
+  curated_iceberg_dataset_id = var.curated_iceberg_dataset_id
+  tmp_dataset_id             = var.tmp_dataset_id
+  enable_tmp_dataset         = var.enable_tmp_dataset
+  enterprise_dataset_id      = var.enterprise_dataset_id
+
+  # ---------------------------------------------------------------------------
+  # (6) BUCKETS
+  # ---------------------------------------------------------------------------
+  # Même logique que pour les datasets :
+  # - on garde l'interface complète
+  # - mais en mode FOUNDATION, ces valeurs ne doivent pas déclencher
+  #   de bindings IAM data
+  # ---------------------------------------------------------------------------
+  raw_bucket_name           = var.raw_bucket_name
+  curated_bucket_name       = var.curated_bucket_name
+  iceberg_bucket_name       = var.iceberg_bucket_name
+  dataproc_temp_bucket_name = var.dataproc_temp_bucket_name
+  scripts_bucket_name       = var.scripts_bucket_name
+
+  # ---------------------------------------------------------------------------
+  # (7) BUILD HUMAIN LOCAL
+  # ---------------------------------------------------------------------------
+  # Permet à ton utilisateur humain de :
+  # - lancer Cloud Build
+  # - pousser des images dans Artifact Registry
+  # ---------------------------------------------------------------------------
+  enable_human_build_access = var.enable_human_build_access
+  human_user_email          = var.human_user_email
+
+  # ---------------------------------------------------------------------------
+  # (8) CLOUD BUILD RUNTIME
+  # ---------------------------------------------------------------------------
+  # Permet au service account utilisé par Cloud Build de :
+  # - lire l'archive source
+  # - pousser l'image Docker dans Artifact Registry
+  # ---------------------------------------------------------------------------
+  enable_cloud_build_runtime_access = var.enable_cloud_build_runtime_access
+  cloud_build_service_account_email = var.cloud_build_service_account_email
 
   allow_pull_request = var.allow_pull_request
 }
 
+# =============================================================================
+# ARTIFACT REGISTRY - CUSTOM CONTAINERS DATAPROC SERVERLESS
+# -----------------------------------------------------------------------------
+# Ce repository Docker héberge les images custom utilisées par Dataproc
+# Serverless, notamment pour embarquer des dépendances spécifiques
+# (ex: GRIB2, xarray, cfgrib, eccodes, etc.).
+#
+# On le garde dans FOUNDATION car :
+# - c'est une ressource de plateforme
+# - elle sert de socle technique partagé
+# - elle ne dépend pas directement des datasets métier
+# =============================================================================
+module "artifact_registry_dataproc" {
+  source = "../modules/artifact_registry"
+
+  project_id    = var.project_id
+  region        = var.region
+  repository_id = "dataproc-custom"
+  description   = "Custom containers for Dataproc Serverless"
+
+  depends_on = [
+    time_sleep.wait_artifact_registry_api
+  ]
+}

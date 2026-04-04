@@ -38,3 +38,4 @@ locals {
   # Email du service agent Dataform (identité gérée par Google)
   dataform_service_agent = "service-${data.google_project.current.number}@gcp-sa-dataform.iam.gserviceaccount.com"
 }
+

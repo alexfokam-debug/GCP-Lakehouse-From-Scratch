@@ -1,0 +1,179 @@
+config {
+  type: "view",
+  schema: "analytics_dev",
+  name: "stg_arco_era5_vertical_profile_vo",
+  tags: ["weather", "arco", "staging"]
+}
+
+/*
+===============================================================================
+STAGING DATAFORM — ARCO ERA5 VERTICAL PROFILE VO
+-------------------------------------------------------------------------------
+OBJECTIF
+-------------------------------------------------------------------------------
+Ce modèle lit la table externe brute/prepared exposée dans curated_ext_dev
+et la transforme en vue staging propre dans analytics_dev.
+
+PHILOSOPHIE DE LA COUCHE STAGING
+-------------------------------------------------------------------------------
+La couche staging sert à :
+- nettoyer légèrement les données
+- harmoniser les noms de colonnes
+- caster les types si nécessaire
+- supprimer les ambiguïtés techniques
+- préparer la donnée pour les futurs modèles métier / analytics
+
+ON NE FAIT PAS ENCORE ICI
+-------------------------------------------------------------------------------
+- d'agrégations métier complexes
+- de KPI finaux
+- de logique décisionnelle
+- de jointures multi-sources lourdes
+
+ON FAIT ICI
+-------------------------------------------------------------------------------
+- sélection claire
+- renommage
+- standardisation
+- enrichissement léger
+===============================================================================
+*/
+
+WITH source AS (
+
+  /*
+  ---------------------------------------------------------------------------
+  ETAPE 1 — LECTURE DE LA SOURCE DECLAREE
+  ---------------------------------------------------------------------------
+  On lit la table externe déjà créée dans BigQuery et déclarée dans Dataform.
+
+  Pourquoi utiliser ref(...) ?
+  - pour garder le lineage Dataform
+  - pour sécuriser les dépendances
+  - pour éviter les références codées en dur partout
+  ---------------------------------------------------------------------------
+  */
+  SELECT *
+  FROM ${ref("arco_era5_vertical_profile_vo")}
+
+),
+
+renamed AS (
+
+  /*
+  ---------------------------------------------------------------------------
+  ETAPE 2 — RENOMMAGE / NORMALISATION DES COLONNES
+  ---------------------------------------------------------------------------
+  On renomme légèrement certaines colonnes pour :
+  - clarifier leur sens
+  - préparer une convention de nommage stable
+  - rendre la table plus lisible pour la suite
+
+  Ici :
+  - time devient observation_time
+  - hybrid devient hybrid_level
+  - vo_mean devient mean_relative_vorticity
+
+  Pourquoi ?
+  Parce que dans un modèle analytics plus tard, ces noms seront plus explicites
+  qu'un nom trop brut hérité du fichier GRIB / du script Python.
+  ---------------------------------------------------------------------------
+  */
+  SELECT
+    time AS observation_time,
+    hybrid AS hybrid_level,
+    vo_mean AS mean_relative_vorticity,
+    source_file,
+    ingestion_ts,
+    step,
+    valid_time
+  FROM source
+
+),
+
+typed AS (
+
+  /*
+  ---------------------------------------------------------------------------
+  ETAPE 3 — CAST / TYPAGE EXPLICITE
+  ---------------------------------------------------------------------------
+  Même si BigQuery détecte souvent bien les types, on préfère ici expliciter
+  certains cast pour stabiliser le comportement.
+
+  Cela permet :
+  - d'éviter des surprises entre environnements
+  - de garantir le schéma attendu
+  - de documenter le type métier cible
+
+  Exemple :
+  - hybrid_level -> FLOAT64
+  - mean_relative_vorticity -> FLOAT64
+  - source_file -> STRING
+  ---------------------------------------------------------------------------
+  */
+  SELECT
+    CAST(observation_time AS TIMESTAMP) AS observation_time,
+    CAST(hybrid_level AS FLOAT64) AS hybrid_level,
+    CAST(mean_relative_vorticity AS FLOAT64) AS mean_relative_vorticity,
+    CAST(source_file AS STRING) AS source_file,
+    CAST(ingestion_ts AS TIMESTAMP) AS ingestion_ts,
+    step,
+    CAST(valid_time AS TIMESTAMP) AS valid_time
+  FROM renamed
+
+),
+
+enriched AS (
+
+  /*
+  ---------------------------------------------------------------------------
+  ETAPE 4 — ENRICHISSEMENT LEGER
+  ---------------------------------------------------------------------------
+  On ajoute ici quelques colonnes utiles pour les futures analyses.
+
+  Exemples :
+  - observation_date : pratique pour les agrégations journalières
+  - ingestion_date   : pratique pour le suivi de fraîcheur
+  - variable_name    : utile si demain tu combines plusieurs variables météo
+
+  Ici on prépare déjà un modèle plus lisible pour les couches supérieures.
+  ---------------------------------------------------------------------------
+  */
+  SELECT
+    observation_time,
+    DATE(observation_time) AS observation_date,
+    hybrid_level,
+    mean_relative_vorticity,
+    source_file,
+    ingestion_ts,
+    DATE(ingestion_ts) AS ingestion_date,
+    step,
+    valid_time,
+    "vo" AS variable_name
+  FROM typed
+
+)
+
+/*
+-----------------------------------------------------------------------------
+ETAPE FINALE — SORTIE STAGING
+-----------------------------------------------------------------------------
+On expose le résultat final proprement ordonné.
+
+Note :
+- le ORDER BY n'est pas indispensable dans une view BigQuery pour la logique
+  métier, mais il aide parfois la lisibilité lors des premiers tests.
+-----------------------------------------------------------------------------
+*/
+SELECT
+  observation_time,
+  observation_date,
+  hybrid_level,
+  mean_relative_vorticity,
+  variable_name,
+  source_file,
+  ingestion_ts,
+  ingestion_date,
+  step,
+  valid_time
+FROM enriched

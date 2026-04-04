@@ -1,0 +1,36 @@
+config {
+  type: "declaration",
+  schema: "curated_ext_dev",
+  name: "arco_era5_vertical_profile_vo"
+}
+
+/*
+===============================================================================
+SOURCE DATAFORM — ARCO ERA5 VERTICAL PROFILE VO
+-------------------------------------------------------------------------------
+OBJECTIF
+-------------------------------------------------------------------------------
+Ce fichier déclare à Dataform qu'il existe déjà une table dans BigQuery,
+et que cette table ne doit PAS être créée par Dataform.
+
+Ici, la table existe déjà dans BigQuery car elle est exposée via Terraform
+comme external table sur les fichiers Parquet produits par Dataproc.
+
+TABLE CIBLE
+-------------------------------------------------------------------------------
+lakehouse-486419.curated_ext_dev.arco_era5_vertical_profile_vo
+
+POURQUOI UNE DECLARATION ?
+-------------------------------------------------------------------------------
+Dans Dataform, une "declaration" sert à :
+- référencer une table existante
+- l'utiliser ensuite dans d'autres modèles avec ref(...)
+- intégrer proprement cette table dans le DAG Dataform
+
+IMPORTANT
+-------------------------------------------------------------------------------
+- Dataform ne crée rien ici
+- Dataform ne modifie rien ici
+- ce fichier sert uniquement de point d’entrée logique dans le pipeline SQL
+===============================================================================
+*/
