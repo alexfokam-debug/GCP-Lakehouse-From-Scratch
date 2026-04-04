@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # OBJECTIF
 # -----------------------------------------------------------------------------
-# Ce fichier gère uniquement les bindings IAM liés à GitHub CI/CD :
+# Ce fichier gère UNIQUEMENT les bindings IAM liés à GitHub CI/CD :
 # - accès éventuel au bucket backend Terraform
 # - accès éventuel au secret Git Dataform
 # - rôles projet nécessaires au service account GitHub CI/CD
@@ -11,41 +11,27 @@
 # IMPORTANT
 # -----------------------------------------------------------------------------
 # Le service account `github_cicd` n'est PAS créé ici.
-# Il est supposé être créé dans `github_wif.tf`.
+# Il est créé dans `github_wif.tf`.
 #
 # Donc ici :
 # - on ne crée pas le SA
 # - on lui attribue seulement des permissions IAM
 #
-# PROBLÈME INITIAL CORRIGÉ
+# ARCHITECTURE CIBLE
 # -----------------------------------------------------------------------------
-# Avant :
-# - certaines ressources GitHub CI/CD se créaient même quand on appelait
-#   le module IAM depuis `lakehouse`, alors que `lakehouse` ne doit PAS gérer
-#   GitHub / WIF / bootstrap CI
+# FOUNDATION :
+# - manage_wif = true
+# - crée le SA GitHub + pool WIF + provider WIF
+# - applique les bindings IAM GitHub CI/CD
 #
-# Maintenant :
-# - tout ce fichier est protégé par `local.github_enabled`
-# - si `manage_wif = false` :
-#   => aucune ressource GitHub CI/CD ne se crée
+# LAKEHOUSE :
+# - manage_wif = false
+# - ne doit créer AUCUNE ressource GitHub / WIF / bootstrap backend
 #
-# PHILOSOPHIE
+# CONSÉQUENCE
 # -----------------------------------------------------------------------------
-# Deux niveaux de contrôle :
-#
-# (1) Activation globale GitHub CI/CD / WIF
-#     -> pilotée par `var.manage_wif`
-#
-# (2) Bootstrap backend / secret
-#     -> piloté par `var.bootstrap_ci_iam`
-#     -> utile seulement dans foundation
-#
-# Donc :
-# - `manage_wif = false`  => aucune ressource GitHub/WIF
-# - `manage_wif = true`
-#   + `bootstrap_ci_iam = false` => rôles projet oui, bootstrap backend non
-# - `manage_wif = true`
-#   + `bootstrap_ci_iam = true`  => rôles projet + bootstrap backend/secret
+# Toutes les ressources de ce fichier sont protégées par des flags calculés
+# dans les locals ci-dessous.
 ###############################################################################
 
 ###############################################################################
@@ -53,26 +39,27 @@
 ###############################################################################
 locals {
   # ---------------------------------------------------------------------------
-  # Flag global d'activation GitHub / WIF
+  # Flag global GitHub / WIF
   # ---------------------------------------------------------------------------
   # Si false :
   # - on ne crée aucun binding IAM GitHub
   # - on ne touche pas au SA GitHub
   # - on ne bootstrap pas le backend
   #
-  # C'est exactement ce qu'on veut dans le root module `lakehouse`.
+  # C'est ce qu'on veut quand le module IAM est appelé depuis `lakehouse`.
   # ---------------------------------------------------------------------------
   github_enabled = var.manage_wif
 
   # ---------------------------------------------------------------------------
   # Repository GitHub effectif
   # ---------------------------------------------------------------------------
-  # On ne le calcule que si :
+  # On ne calcule cette valeur que si :
   # - manage_wif = true
-  # - github_repository est non null
-  # - github_repository n'est pas vide
+  # - github_repository n'est pas null
+  # - github_repository n'est pas une chaîne vide
   #
-  # Sinon => null
+  # Exemple attendu :
+  # "alexfokam-debug/GCP-Lakehouse-From-Scratch"
   # ---------------------------------------------------------------------------
   github_repository_effective = (
     var.manage_wif &&
@@ -83,10 +70,12 @@ locals {
   # ---------------------------------------------------------------------------
   # Owner GitHub effectif
   # ---------------------------------------------------------------------------
-  # Si l'utilisateur n'a pas fourni github_repository_owner, on l'infère depuis
-  # owner/repo.
+  # Si github_repository_owner n'est pas fourni explicitement,
+  # on le déduit à partir de owner/repo.
   #
-  # Cette valeur n'est calculée que si GitHub est activé.
+  # Exemple :
+  # repo = "alexfokam-debug/GCP-Lakehouse-From-Scratch"
+  # owner = "alexfokam-debug"
   # ---------------------------------------------------------------------------
   github_repository_owner_effective = (
     local.github_enabled
@@ -97,11 +86,13 @@ locals {
   # ---------------------------------------------------------------------------
   # Flag bootstrap backend / secret
   # ---------------------------------------------------------------------------
-  # Le bootstrap n'est autorisé que si :
-  # - GitHub/WIF est activé globalement
-  # - bootstrap_ci_iam = true
+  # Le bootstrap backend ne doit être activé que si :
+  # - GitHub/WIF est activé
+  # - ET bootstrap_ci_iam = true
   #
-  # Cela évite de créer des bindings backend inutiles dans `lakehouse`.
+  # Donc :
+  # - foundation : souvent true ou piloté selon ton besoin
+  # - lakehouse  : toujours false
   # ---------------------------------------------------------------------------
   github_bootstrap_enabled = (
     local.github_enabled &&
@@ -115,8 +106,8 @@ locals {
 # OBJECTIF
 # -----------------------------------------------------------------------------
 # Donner au SA GitHub CI/CD les droits minimum pour :
-# - manipuler le backend Terraform (bucket state)
-# - lire le secret du token Git Dataform
+# - lire/écrire le state Terraform dans le bucket backend
+# - lire le secret Git utilisé par Dataform si nécessaire
 #
 # IMPORTANT
 # -----------------------------------------------------------------------------
@@ -124,34 +115,39 @@ locals {
 # - GitHub/WIF est activé
 # - ET bootstrap_ci_iam = true
 #
-# Donc `count = local.github_bootstrap_enabled ? 1 : 0`
+# Donc : count = local.github_bootstrap_enabled ? 1 : 0
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Accès objets sur le bucket de state Terraform
+# Accès objets sur le bucket backend Terraform
 # -----------------------------------------------------------------------------
 # Permet au SA GitHub CI/CD de :
-# - lire le state
-# - écrire le state
-# - mettre à jour les objets du backend
+# - lire le fichier state
+# - écrire le fichier state
+# - mettre à jour les objets du backend GCS
+#
+# NOTE IMPORTANTE
+# -----------------------------------------------------------------------------
+# Ici on référence google_service_account.github_cicd[0].email
+# car dans github_wif.tf le service account doit être déclaré avec :
+#
+# resource "google_service_account" "github_cicd" {
+#   count = local.github_enabled ? 1 : 0
+#   ...
+# }
 # -----------------------------------------------------------------------------
 resource "google_storage_bucket_iam_member" "github_tf_backend_object_admin" {
   count  = local.github_bootstrap_enabled ? 1 : 0
   bucket = var.tf_state_bucket_name
   role   = "roles/storage.objectAdmin"
-
-  # IMPORTANT :
-  # Le SA github_cicd a très probablement un `count = 1` dans github_wif.tf
-  # lorsqu'il est activé.
-  # Donc ici on référence bien `[0]`.
   member = "serviceAccount:${google_service_account.github_cicd[0].email}"
 }
 
 # -----------------------------------------------------------------------------
-# Lecture metadata bucket
+# Lecture metadata bucket backend
 # -----------------------------------------------------------------------------
-# Permet la lecture des métadonnées de bucket nécessaires dans certains contextes
-# backend GCS.
+# Certaines opérations backend GCS nécessitent aussi de lire les métadonnées
+# du bucket lui-même.
 # -----------------------------------------------------------------------------
 resource "google_storage_bucket_iam_member" "github_tf_backend_bucket_reader" {
   count  = local.github_bootstrap_enabled ? 1 : 0
@@ -163,8 +159,7 @@ resource "google_storage_bucket_iam_member" "github_tf_backend_bucket_reader" {
 # -----------------------------------------------------------------------------
 # Lecture du secret Git Dataform
 # -----------------------------------------------------------------------------
-# Permet à GitHub CI/CD de lire le token Git utilisé côté Dataform
-# (si ton pipeline doit l'utiliser).
+# Permet au SA GitHub CI/CD de lire le secret Git si le pipeline en a besoin.
 # -----------------------------------------------------------------------------
 resource "google_secret_manager_secret_iam_member" "github_cicd_can_read_dataform_git_token" {
   count     = local.github_bootstrap_enabled ? 1 : 0
@@ -179,30 +174,21 @@ resource "google_secret_manager_secret_iam_member" "github_cicd_can_read_datafor
 # -----------------------------------------------------------------------------
 # OBJECTIF
 # -----------------------------------------------------------------------------
-# Donner au SA GitHub CI/CD les rôles nécessaires pour piloter Terraform depuis
-# GitHub Actions.
+# Donner au SA GitHub CI/CD les rôles nécessaires pour piloter Terraform
+# depuis GitHub Actions.
 #
 # IMPORTANT
 # -----------------------------------------------------------------------------
 # Ces rôles ne dépendent PAS du bootstrap backend.
 # Ils dépendent uniquement du fait que GitHub/WIF soit activé.
 #
-# Donc `count = local.github_enabled ? 1 : 0`
-#
-# REMARQUE
-# -----------------------------------------------------------------------------
-# Ces rôles sont puissants.
-# C'est acceptable pour un lab / projet perso structuré.
-# En entreprise, on viserait souvent une séparation plus fine des permissions.
+# Donc : count = local.github_enabled ? 1 : 0
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # BigQuery Admin
 # -----------------------------------------------------------------------------
-# Permet au pipeline Terraform de créer / modifier :
-# - datasets
-# - tables
-# - connexions BigQuery
+# Permet à Terraform de gérer datasets, tables, connexions, etc.
 # -----------------------------------------------------------------------------
 resource "google_project_iam_member" "github_cicd_bigquery_admin" {
   count   = local.github_enabled ? 1 : 0
@@ -214,10 +200,7 @@ resource "google_project_iam_member" "github_cicd_bigquery_admin" {
 # -----------------------------------------------------------------------------
 # Storage Admin
 # -----------------------------------------------------------------------------
-# Permet au pipeline Terraform de gérer :
-# - buckets
-# - IAM buckets
-# - objets si nécessaire
+# Permet à Terraform de gérer buckets, IAM buckets et objets si nécessaire.
 # -----------------------------------------------------------------------------
 resource "google_project_iam_member" "github_cicd_storage_admin" {
   count   = local.github_enabled ? 1 : 0
@@ -229,7 +212,7 @@ resource "google_project_iam_member" "github_cicd_storage_admin" {
 # -----------------------------------------------------------------------------
 # IAM Security Admin
 # -----------------------------------------------------------------------------
-# Permet au pipeline Terraform de gérer des bindings IAM projet / ressources.
+# Permet de gérer les bindings IAM sur le projet et certaines ressources.
 # -----------------------------------------------------------------------------
 resource "google_project_iam_member" "github_cicd_iam_admin" {
   count   = local.github_enabled ? 1 : 0
@@ -241,7 +224,7 @@ resource "google_project_iam_member" "github_cicd_iam_admin" {
 # -----------------------------------------------------------------------------
 # Service Account User
 # -----------------------------------------------------------------------------
-# Permet au pipeline d'utiliser / attacher certains service accounts.
+# Permet au pipeline d'attacher / utiliser des service accounts existants.
 # -----------------------------------------------------------------------------
 resource "google_project_iam_member" "github_cicd_sa_user" {
   count   = local.github_enabled ? 1 : 0
@@ -253,10 +236,7 @@ resource "google_project_iam_member" "github_cicd_sa_user" {
 # -----------------------------------------------------------------------------
 # Dataform Admin
 # -----------------------------------------------------------------------------
-# Permet au pipeline de gérer :
-# - repository Dataform
-# - workflow configs
-# - release configs
+# Permet de gérer les repositories, release configs, workflow configs, etc.
 # -----------------------------------------------------------------------------
 resource "google_project_iam_member" "github_cicd_dataform_admin" {
   count   = local.github_enabled ? 1 : 0
@@ -268,10 +248,7 @@ resource "google_project_iam_member" "github_cicd_dataform_admin" {
 # -----------------------------------------------------------------------------
 # Dataplex Admin
 # -----------------------------------------------------------------------------
-# Permet au pipeline de créer / modifier :
-# - lakes
-# - zones
-# - assets
+# Permet de gérer les lakes, zones, assets Dataplex.
 # -----------------------------------------------------------------------------
 resource "google_project_iam_member" "github_cicd_dataplex_admin" {
   count   = local.github_enabled ? 1 : 0
@@ -283,7 +260,7 @@ resource "google_project_iam_member" "github_cicd_dataplex_admin" {
 # -----------------------------------------------------------------------------
 # Secret Manager Admin
 # -----------------------------------------------------------------------------
-# Permet au pipeline de gérer certains secrets si nécessaire.
+# Permet de gérer certains secrets via Terraform si besoin.
 # -----------------------------------------------------------------------------
 resource "google_project_iam_member" "github_cicd_secret_admin" {
   count   = local.github_enabled ? 1 : 0
@@ -295,8 +272,8 @@ resource "google_project_iam_member" "github_cicd_secret_admin" {
 # -----------------------------------------------------------------------------
 # Workload Identity Pool Admin (option avancée)
 # -----------------------------------------------------------------------------
-# À n'activer que si tu veux que le pipeline CI/CD gère lui-même le pool/provider
-# WIF. Souvent désactivé par défaut.
+# À activer seulement si tu veux que GitHub CI/CD puisse lui-même gérer
+# le pool/provider WIF.
 # -----------------------------------------------------------------------------
 resource "google_project_iam_member" "github_cicd_wif_pool_admin" {
   count   = (local.github_enabled && var.enable_github_cicd_wif_pool_admin) ? 1 : 0
@@ -310,10 +287,10 @@ resource "google_project_iam_member" "github_cicd_wif_pool_admin" {
 # -----------------------------------------------------------------------------
 # Permet au pipeline Terraform GitHub CI/CD de :
 # - lire les repositories Artifact Registry
-# - planifier les changements
-# - créer / mettre à jour les repositories si nécessaire
+# - faire le refresh Terraform sans erreur 403
+# - créer / modifier les repositories si nécessaire
 #
-# Sans ce rôle, le refresh Terraform peut échouer avec :
+# C'est précisément ce rôle qui évite les erreurs du type :
 # artifactregistry.repositories.get denied
 # -----------------------------------------------------------------------------
 resource "google_project_iam_member" "github_cicd_artifactregistry_admin" {
@@ -321,4 +298,26 @@ resource "google_project_iam_member" "github_cicd_artifactregistry_admin" {
   project = var.project_id
   role    = "roles/artifactregistry.admin"
   member  = "serviceAccount:${google_service_account.github_cicd[0].email}"
+}
+
+# =============================================================================
+# 3) ACCÈS HUMAIN LOCAL — ARTIFACT REGISTRY (OPTIONNEL)
+# -----------------------------------------------------------------------------
+# OBJECTIF
+# -----------------------------------------------------------------------------
+# Permettre à ton utilisateur humain de :
+# - lancer des builds locaux
+# - pousser des images Docker
+# - lire / gérer les repositories Artifact Registry
+#
+# REMARQUE
+# -----------------------------------------------------------------------------
+# Si tu veux être plus restrictif :
+# - remplace artifactregistry.admin par artifactregistry.writer
+# =============================================================================
+resource "google_project_iam_member" "human_artifactregistry_admin" {
+  count   = var.enable_human_build_access ? 1 : 0
+  project = var.project_id
+  role    = "roles/artifactregistry.admin"
+  member  = "user:${var.human_user_email}"
 }
