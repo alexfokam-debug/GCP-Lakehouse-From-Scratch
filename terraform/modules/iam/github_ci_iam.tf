@@ -1,40 +1,4 @@
 ###############################################################################
-# github_ci_iam.tf — IAM pour GitHub CI/CD
-# -----------------------------------------------------------------------------
-# OBJECTIF
-# -----------------------------------------------------------------------------
-# Ce fichier gère UNIQUEMENT les bindings IAM liés à GitHub CI/CD :
-# - accès éventuel au bucket backend Terraform
-# - accès éventuel au secret Git Dataform
-# - rôles projet nécessaires au service account GitHub CI/CD
-#
-# IMPORTANT
-# -----------------------------------------------------------------------------
-# Le service account `github_cicd` n'est PAS créé ici.
-# Il est créé dans `github_wif.tf`.
-#
-# Donc ici :
-# - on ne crée pas le SA
-# - on lui attribue seulement des permissions IAM
-#
-# ARCHITECTURE CIBLE
-# -----------------------------------------------------------------------------
-# FOUNDATION :
-# - manage_wif = true
-# - crée le SA GitHub + pool WIF + provider WIF
-# - applique les bindings IAM GitHub CI/CD
-#
-# LAKEHOUSE :
-# - manage_wif = false
-# - ne doit créer AUCUNE ressource GitHub / WIF / bootstrap backend
-#
-# CONSÉQUENCE
-# -----------------------------------------------------------------------------
-# Toutes les ressources de ce fichier sont protégées par des flags calculés
-# dans les locals ci-dessous.
-###############################################################################
-
-###############################################################################
 # LOCALS — GARDES DE SÉCURITÉ / ACTIVATION CONDITIONNELLE
 ###############################################################################
 locals {
@@ -44,16 +8,19 @@ locals {
   github_enabled = var.manage_wif
 
   # ---------------------------------------------------------------------------
-  # Repository GitHub effectif
+  # Repository GitHub normalisé (null-safe)
   # ---------------------------------------------------------------------------
-  # IMPORTANT :
-  # `trimspace(null)` provoque une erreur Terraform.
-  # Donc on sécurise avec coalesce(var.github_repository, "").
+  # On évite complètement coalesce ici.
+  # try() est plus robuste :
+  # - si null → ""
+  # - si valeur → trim propre
   # ---------------------------------------------------------------------------
+  github_repository_raw = try(trimspace(var.github_repository), "")
+
   github_repository_effective = (
-    var.manage_wif &&
-    trimspace(coalesce(var.github_repository, "")) != ""
-  ) ? var.github_repository : null
+    local.github_enabled &&
+    local.github_repository_raw != ""
+  ) ? local.github_repository_raw : null
 
   # ---------------------------------------------------------------------------
   # Owner GitHub effectif
@@ -72,7 +39,6 @@ locals {
     var.bootstrap_ci_iam
   )
 }
-
 # =============================================================================
 # 1) BOOTSTRAP BACKEND STATE BUCKET + SECRET
 # -----------------------------------------------------------------------------

@@ -1,39 +1,31 @@
 ################################################################################
-# IAM - ACCÈS UTILISATEUR HUMAIN POUR BUILD LOCAL
+# IAM - HUMAN BUILD ACCESS
 # ------------------------------------------------------------------------------
 # OBJECTIF
-# Accorder explicitement à un utilisateur humain les rôles minimums nécessaires
-# pour :
-# - lancer gcloud builds submit
-# - utiliser les services du projet pendant le build
-# - pousser une image dans Artifact Registry
+# Donner à l'utilisateur humain certains droits de build local :
+# - Cloud Build
+# - Artifact Registry
 #
-# POURQUOI LE FAIRE ?
-# - rendre l'accès reproductible
-# - éviter les ambiguïtés liées aux héritages IAM d'organisation
-# - permettre le debug local proprement
-#
-# ACTIVATION
-# Ce bloc n'est créé que si :
-# - enable_human_build_access = true
-# - human_user_email != null
-################################################################################
-
-################################################################################
-# LOCALS - HUMAN BUILD ACCESS
-# ------------------------------------------------------------------------------
-# trimspace() enlève les espaces en début/fin de chaîne.
-# On l'utilise pour éviter les cas où l'email serait renseigné avec des espaces.
+# NOTE
+# On sécurise les variables optionnelles avec try(..., "")
 ################################################################################
 
 locals {
+  # Email humain normalisé
+  # - null -> ""
+  # - espaces supprimés
+  human_user_email_effective = try(trimspace(var.human_user_email), "")
+
+  # Activation réelle seulement si :
+  # - le flag est activé
+  # - ET un email utilisateur est bien fourni
   enable_human_build_access_effective = (
     var.enable_human_build_access &&
-    var.human_user_email != null &&
-    trimspace(var.human_user_email) != ""
+    local.human_user_email_effective != ""
   )
 
-  human_user_member = local.enable_human_build_access_effective ? "user:${trimspace(var.human_user_email)}" : null
+  # Member IAM utilisateur
+  human_user_member = local.enable_human_build_access_effective ? "user:${local.human_user_email_effective}" : null
 }
 
 resource "google_project_iam_member" "human_cloudbuild_editor" {
