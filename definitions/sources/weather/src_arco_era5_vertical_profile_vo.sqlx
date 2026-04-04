@@ -1,0 +1,14 @@
+config {
+  type: "view",
+  schema: "curated",
+  name: "src_arco_era5_vertical_profile_vo",
+  description: "Source brute VO depuis external table ERA5"
+}
+
+SELECT
+  time,
+  hybrid,
+  vo_mean,
+  source_file
+FROM
+  `lakehouse-486419.curated_ext_dev.arco_era5_vertical_profile_vo`

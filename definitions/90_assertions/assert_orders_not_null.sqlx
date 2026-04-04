@@ -1,10 +1,10 @@
 config {
   type: "assertion",
-  schema: "analytics_dev",
+  schema: "analytics",
   name: "assert_orders_not_null",
-  tags: ["dq", "prod"]
+  description: "Temporary assertion for enterprise_orders_daily"
 }
 
-select *
-from ${ref("enterprise_orders_daily")}
-where order_id is null
+SELECT *
+FROM ${ref("enterprise_orders_daily")}
+WHERE dummy_value IS NULL

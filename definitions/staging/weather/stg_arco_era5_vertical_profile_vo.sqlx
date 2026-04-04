@@ -1,0 +1,24 @@
+config {
+  type: "table",
+  schema: "curated",
+  name: "stg_arco_era5_vertical_profile_vo",
+  description: "Données VO nettoyées et enrichies"
+}
+
+SELECT
+  -- ⚠️ Conversion timestamp (à ajuster si besoin)
+  TIMESTAMP_MILLIS(time) AS timestamp_utc,
+
+  DATE(TIMESTAMP_MILLIS(time)) AS date,
+
+  hybrid,
+
+  CAST(vo_mean AS FLOAT64) AS vo_mean,
+
+  source_file
+
+FROM
+  ${ref("src_arco_era5_vertical_profile_vo")}
+
+WHERE
+  vo_mean IS NOT NULL

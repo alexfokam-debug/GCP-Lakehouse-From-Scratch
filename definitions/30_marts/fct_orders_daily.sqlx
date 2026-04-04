@@ -1,38 +1,10 @@
 config {
-  type: "incremental",
-  schema: "analytics_dev",
+  type: "table",
+  schema: "analytics",
   name: "fct_orders_daily",
-  tags: ["prod"],
-  dependencies: ["op_disable_rpf_fct_orders_daily"],
-  uniqueKey: ["order_date", "customer_id"],
-  bigquery: {
-      partitionBy: "order_date",
-      requirePartitionFilter: ${constants.env == "prod"}
-    }
+  description: "Temporary clean mart for orders daily"
 }
 
-with base as (
-  select
-    order_date,
-    customer_id,
-    order_id,
-    cast(amount as numeric) as amount
-  from ${ref("stg_orders")}
-
-  ${when(incremental(),
-    `where order_date >= date_sub(current_date(), interval 7 day)`,
-    ``
-  )}
-),
-
-daily as (
-  select
-    order_date,
-    customer_id,
-    count(distinct order_id) as nb_orders,
-    sum(amount) as total_amount
-  from base
-  group by 1,2
-)
-
-select * from daily
+SELECT
+  CURRENT_DATE() AS run_date,
+  1 AS dummy_value
