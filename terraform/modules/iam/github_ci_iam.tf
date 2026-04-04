@@ -39,60 +39,33 @@
 ###############################################################################
 locals {
   # ---------------------------------------------------------------------------
-  # Flag global GitHub / WIF
-  # ---------------------------------------------------------------------------
-  # Si false :
-  # - on ne crée aucun binding IAM GitHub
-  # - on ne touche pas au SA GitHub
-  # - on ne bootstrap pas le backend
-  #
-  # C'est ce qu'on veut quand le module IAM est appelé depuis `lakehouse`.
+  # Flag global d'activation GitHub / WIF
   # ---------------------------------------------------------------------------
   github_enabled = var.manage_wif
 
   # ---------------------------------------------------------------------------
   # Repository GitHub effectif
   # ---------------------------------------------------------------------------
-  # On ne calcule cette valeur que si :
-  # - manage_wif = true
-  # - github_repository n'est pas null
-  # - github_repository n'est pas une chaîne vide
-  #
-  # Exemple attendu :
-  # "alexfokam-debug/GCP-Lakehouse-From-Scratch"
+  # IMPORTANT :
+  # `trimspace(null)` provoque une erreur Terraform.
+  # Donc on sécurise avec coalesce(var.github_repository, "").
   # ---------------------------------------------------------------------------
   github_repository_effective = (
     var.manage_wif &&
-    var.github_repository != null &&
-    trimspace(var.github_repository) != ""
+    trimspace(coalesce(var.github_repository, "")) != ""
   ) ? var.github_repository : null
 
   # ---------------------------------------------------------------------------
   # Owner GitHub effectif
   # ---------------------------------------------------------------------------
-  # Si github_repository_owner n'est pas fourni explicitement,
-  # on le déduit à partir de owner/repo.
-  #
-  # Exemple :
-  # repo = "alexfokam-debug/GCP-Lakehouse-From-Scratch"
-  # owner = "alexfokam-debug"
-  # ---------------------------------------------------------------------------
   github_repository_owner_effective = (
-    local.github_enabled
+    local.github_enabled && local.github_repository_effective != null
     ? coalesce(var.github_repository_owner, split("/", local.github_repository_effective)[0])
     : null
   )
 
   # ---------------------------------------------------------------------------
   # Flag bootstrap backend / secret
-  # ---------------------------------------------------------------------------
-  # Le bootstrap backend ne doit être activé que si :
-  # - GitHub/WIF est activé
-  # - ET bootstrap_ci_iam = true
-  #
-  # Donc :
-  # - foundation : souvent true ou piloté selon ton besoin
-  # - lakehouse  : toujours false
   # ---------------------------------------------------------------------------
   github_bootstrap_enabled = (
     local.github_enabled &&
