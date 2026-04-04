@@ -40,6 +40,15 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+variable "github_repository" {
+  description = "Repository GitHub (owner/repo). Requis par le module IAM, même si WIF est désactivé ici."
+  type        = string
+}
+
+variable "tf_state_bucket_name" {
+  description = "Nom du bucket GCS de remote state Terraform. Requis par le module IAM."
+  type        = string
+}
 
 # -----------------------------------------------------------------------------
 # (1) Métadonnées "data domain"
@@ -182,4 +191,36 @@ variable "dataform_git_token_secret_id" {
   description = "Secret Manager secret_id containing the Git token"
   type        = string
   default     = ""
+}
+variable "enable_dataplex" {
+  type    = bool
+  default = false
+}
+
+# -----------------------------------------------------------------------------
+# (10) External tables CURATED en Parquet (prepared zone)
+# -----------------------------------------------------------------------------
+# Objectif :
+# - exposer dans BigQuery les fichiers Parquet produits par Dataproc
+# - permettre requêtage SQL immédiat sans charger physiquement la donnée
+# - préparer la couche d'entrée pour Dataform
+#
+# Exemple typique :
+# curated_prepared_external_tables = {
+#   arco_era5_vertical_profile_vo = {
+#     source_format = "PARQUET"
+#     source_uris = [
+#       "gs://lakehouse-486419-curated-dev/domain=weather/dataset=arco_era5/prepared/daily_vertical_profile_vo/*.parquet"
+#     ]
+#   }
+# }
+# -----------------------------------------------------------------------------
+variable "curated_prepared_external_tables" {
+  description = "External BigQuery tables configuration for prepared parquet data stored in curated GCS."
+  type = map(object({
+    source_uris   = list(string)
+    source_format = string
+    autodetect    = optional(bool)
+  }))
+  default = {}
 }

@@ -2,9 +2,9 @@
 # terraform/lakehouse/envs/prod/terraform.tfvars
 ##############################################################################
 
-project_id    = "lakehouse-486419"
-environment   = "prod"
-region        = "europe-west1"
+project_id  = "lakehouse-486419"
+environment = "prod"
+region      = "europe-west1"
 
 labels = {
   owner       = "alex"

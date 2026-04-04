@@ -226,6 +226,7 @@ resource "google_bigquery_dataset" "analytics" {
 # - des datasets curated/raw_ext (BQ asset)
 # =============================================================================
 module "dataplex" {
+  count  = var.enable_dataplex ? 1 : 0
   source = "../modules/dataplex"
 
   project_id  = var.project_id
@@ -496,4 +497,115 @@ resource "google_storage_bucket_object" "bootstrap_sales_transactions_parquet" {
       source,
     ]
   }
+}
+
+# =============================================================================
+# 17bis) IAM — RUNTIMES DATA (DATAFORM / DATAPROC)
+# =============================================================================
+module "iam_lakehouse_runtime" {
+  source = "../modules/iam"
+
+  # ---------------------------------------------------------------------------
+  # Common
+  # ---------------------------------------------------------------------------
+  project_id  = var.project_id
+  environment = local.env
+
+  # ---------------------------------------------------------------------------
+  # Désactivation explicite de tout ce qui appartient à foundation
+  # ---------------------------------------------------------------------------
+  manage_wif                        = false
+  enable_github_cicd_wif_pool_admin = false
+  bootstrap_ci_iam                  = false
+  enable_human_build_access         = false
+  enable_cloud_build_runtime_access = false
+
+  # ---------------------------------------------------------------------------
+  # Activation des runtimes data
+  # ---------------------------------------------------------------------------
+  enable_lakehouse_runtimes = true
+
+  # ---------------------------------------------------------------------------
+  # Datasets BigQuery
+  # ---------------------------------------------------------------------------
+  curated_dataset_id         = module.bq.curated_dataset_id
+  analytics_dataset_id       = google_bigquery_dataset.analytics.dataset_id
+  raw_external_dataset_id    = google_bigquery_dataset.raw_external.dataset_id
+  curated_iceberg_dataset_id = google_bigquery_dataset.curated_iceberg.dataset_id
+  tmp_dataset_id             = module.bq.tmp_dataset_id
+  enable_tmp_dataset         = var.enable_tmp_dataset
+  enterprise_dataset_id      = module.bq.enterprise_dataset_id
+
+  # ---------------------------------------------------------------------------
+  # Buckets GCS
+  # ---------------------------------------------------------------------------
+  raw_bucket_name           = module.gcs_raw.bucket_name
+  curated_bucket_name       = module.gcs_curated.bucket_name
+  iceberg_bucket_name       = module.gcs_iceberg.bucket_name
+  dataproc_temp_bucket_name = module.gcs_dataproc_temp.bucket_name
+  scripts_bucket_name       = module.gcs_scripts.bucket_name
+
+  depends_on = [
+    module.bq,
+    module.gcs_raw,
+    module.gcs_curated,
+    module.gcs_iceberg,
+    module.gcs_scripts,
+    module.gcs_dataproc_temp,
+    google_bigquery_dataset.raw_external,
+    google_bigquery_dataset.analytics,
+    google_bigquery_dataset.curated_external,
+    google_bigquery_dataset.curated_iceberg
+  ]
+}
+
+# =============================================================================
+# 11bis) BIGQUERY — External tables CURATED PREPARED (PARQUET)
+# -----------------------------------------------------------------------------
+# OBJECTIF
+# -----------------------------------------------------------------------------
+# Exposer dans BigQuery les fichiers Parquet produits par Dataproc
+# dans la zone CURATED / PREPARED.
+#
+# Pourquoi ce bloc ?
+# - Les fichiers existent déjà dans GCS
+# - On veut les rendre requêtables immédiatement en SQL
+# - C'est l'étape naturelle avant Dataform
+#
+# Exemple :
+# gs://lakehouse-486419-curated-dev/domain=weather/dataset=arco_era5/prepared/daily_vertical_profile_vo/*.parquet
+#
+# Résultat :
+# - dataset : curated_ext_dev
+# - table   : arco_era5_vertical_profile_vo
+#
+# NOTE IMPORTANTE
+# -----------------------------------------------------------------------------
+# Ici on reste sur une external table "classique" PARQUET.
+# Donc :
+# - pas besoin de BigLake connection_id
+# - pas besoin de format ICEBERG
+# - BigQuery lit directement les fichiers Parquet
+# =============================================================================
+resource "google_bigquery_table" "curated_prepared_external_tables" {
+  for_each = var.curated_prepared_external_tables
+
+  project    = var.project_id
+  dataset_id = google_bigquery_dataset.curated_external.dataset_id
+  table_id   = each.key
+
+  deletion_protection = false
+
+  external_data_configuration {
+    autodetect    = try(each.value.autodetect, true)
+    source_format = each.value.source_format
+    source_uris   = each.value.source_uris
+  }
+
+  labels = merge(var.labels, {
+    layer  = "curated"
+    zone   = "prepared"
+    format = "parquet"
+    type   = "external_table"
+  })
 }

@@ -133,3 +133,21 @@ enable_samples = true
 
 # Active les fichiers parquet bootstrap pour éviter "matched no files"
 enable_sales_orders_external_tables = true
+
+github_repository    = "alexfokam-debug/GCP-Lakehouse-From-Scratch"
+tf_state_bucket_name = "lakehouse-terraform-states-486419"
+
+enable_dataplex = false
+
+##############################################################################
+# CURATED prepared external tables (Parquet produits par Dataproc)
+##############################################################################
+curated_prepared_external_tables = {
+  arco_era5_vertical_profile_vo = {
+    source_format = "PARQUET"
+    source_uris = [
+      "gs://lakehouse-486419-curated-dev/domain=weather/dataset=arco_era5/prepared/daily_vertical_profile_vo/*.parquet"
+    ]
+    autodetect = true
+  }
+}

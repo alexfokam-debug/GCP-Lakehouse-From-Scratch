@@ -2,9 +2,9 @@
 # terraform/lakehouse/envs/staging/terraform.tfvars
 ##############################################################################
 
-project_id    = "lakehouse-486419"
-environment   = "staging"
-region        = "europe-west1"
+project_id  = "lakehouse-486419"
+environment = "staging"
+region      = "europe-west1"
 
 labels = {
   owner       = "alex"
