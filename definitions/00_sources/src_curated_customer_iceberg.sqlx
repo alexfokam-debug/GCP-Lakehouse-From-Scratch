@@ -2,8 +2,13 @@ config {
   type: "view",
   schema: "analytics",
   name: "src_curated_customers_iceberg",
-  description: "Source curated customers exposed as a Dataform view"
+  description: "Source customers view from curated layer"
 }
 
-SELECT *
-FROM `lakehouse-486419.curated_dev.customer`
+-- TEMPORAIRE ET PROPRE :
+-- on évite de pointer vers une table inexistante `curated_dev.customer`
+-- tant qu'on n'a pas validé son vrai nom en BigQuery.
+
+SELECT
+  1 AS customer_id,
+  "dummy_customer" AS customer_name

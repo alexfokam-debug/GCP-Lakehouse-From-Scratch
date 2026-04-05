@@ -2,12 +2,14 @@ config {
   type: "view",
   schema: "analytics",
   name: "stg_orders",
-  description: "Staging view for raw orders"
+  description: "Staging view for orders"
 }
 
 SELECT
   order_id,
-  customer_id,
-  order_date,
-  amount
+  order_name,
+  order_amount,
+  order_ts,
+  load_ts,
+  record_source
 FROM ${ref("src_raw_orders")}
