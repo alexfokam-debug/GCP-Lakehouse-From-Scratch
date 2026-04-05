@@ -9,6 +9,12 @@ SELECT
   order_id,
   order_name,
   order_amount,
+
+  -- On expose une vraie date métier à partir du timestamp source.
+  -- Si order_ts est déjà de type TIMESTAMP/DATETIME dans BigQuery,
+  -- DATE(order_ts) fonctionne.
+  DATE(order_ts) AS order_date,
+
   order_ts,
   load_ts,
   record_source

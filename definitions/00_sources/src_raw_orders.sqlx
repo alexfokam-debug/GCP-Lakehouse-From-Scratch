@@ -1,20 +1,15 @@
-js { const constants = require("includes/constants"); }
-
 config {
   type: "view",
-  schema: constants.analyticsDataset,
+  schema: "analytics",
   name: "src_raw_orders",
-  tags: ["dev", "prod"]
+  description: "Raw orders source exposed to Dataform"
 }
 
--- orders = déclaration qui pointe vers raw_ext_<env>.orders (external table)
-select
-  -- ton parquet sample.parquet a très probablement id/name/amount/event_ts
-  cast(id as string)         as order_id,
-  cast(name as string)       as order_name,
-  cast(amount as numeric)    as order_amount,
-  timestamp(event_ts)        as order_ts,
-
-  current_timestamp() as load_ts,
-  "raw_ext" as record_source
-from `${dataform.projectConfig.defaultDatabase}.${constants.rawExtDataset}.orders`
+SELECT
+  order_id,
+  order_name,
+  order_amount,
+  order_ts,
+  load_ts,
+  record_source
+FROM `lakehouse-486419.analytics_dev.src_raw_orders`

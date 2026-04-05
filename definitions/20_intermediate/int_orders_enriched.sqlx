@@ -1,21 +1,21 @@
 config {
   type: "view",
-  schema: "analytics_dev",
+  schema: "analytics",
   name: "int_orders_enriched",
-  tags: ["intermediate", "prod"]
+  description: "Intermediate enriched orders model"
 }
 
-select
+SELECT
   o.order_id,
-  o.customer_id,
+  o.order_name,
+  o.order_amount,
   o.order_date,
-  o.amount as order_amount,
-
+  o.order_ts,
+  o.load_ts,
+  o.record_source,
   s.transaction_id,
-  s.amount as transaction_amount,
-
-  current_timestamp() as enriched_ts
-from ${ref("stg_orders")} o
-left join ${ref("stg_sales_transactions")} s
-  on s.order_date = o.order_date
-  and s.customer_id = o.customer_id
+  s.transaction_amount,
+  s.transaction_ts
+FROM ${ref("stg_orders")} AS o
+LEFT JOIN ${ref("stg_sales_transactions")} AS s
+  ON o.order_id = s.order_id
