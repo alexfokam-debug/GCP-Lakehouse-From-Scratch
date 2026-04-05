@@ -1,18 +1,9 @@
-const constants = require("includes/constants");
 config {
   type: "view",
-  tags: ["staging"],
-  schema: constants.ANALYTICS_DATASET,
-  name: "src_curated_customers_iceberg"
+  schema: "analytics",
+  name: "src_curated_customers_iceberg",
+  description: "Source curated customers exposed as a Dataform view"
 }
 
-/**
- * SOURCE CURATED (Iceberg) :
- * - Les tables Iceberg sont stockées sur GCS
- * - Exposées à BigQuery via tables externes dans curated_ext_<env>
- */
-
-select
-  *
-from
-  `${dataform.projectConfig.defaultDatabase}.${constants.CURATED_EXT_DATASET}.customer`
+SELECT *
+FROM `lakehouse-486419.curated_dev.customer`

@@ -2,12 +2,17 @@ config {
   type: "table",
   schema: "analytics",
   name: "mart_arco_era5_vertical_profile_vo_daily",
-  description: "Daily aggregation of ERA5 vertical profile data"
+  description: "Daily aggregation of ERA5 vertical profile VO data",
+  bigquery: {
+    partitionBy: "date",
+    clusterBy: ["date"]
+  }
 }
 
 SELECT
-  DATE(TIMESTAMP_MILLIS(time)) AS date,
+  date,
   COUNT(*) AS nb_records,
   AVG(vo_mean) AS avg_vo_mean
 FROM ${ref("stg_arco_era5_vertical_profile_vo")}
+WHERE date IS NOT NULL
 GROUP BY date

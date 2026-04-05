@@ -1,16 +1,13 @@
 config {
   type: "view",
-  schema: constants.analyticsDataset,
+  schema: "analytics",
   name: "stg_orders",
-  tags: ["staging", "prod"]
+  description: "Staging view for raw orders"
 }
 
-select
-  cast(id as string)                  as order_id,
-  cast(name as string)                as customer_id,
-  cast(event_ts as timestamp)         as order_timestamp,
-  date(cast(event_ts as timestamp))   as order_date,
-  cast(amount as numeric)             as amount,
-  current_timestamp()                 as load_ts
-from ${ref("src_raw_orders")}
-where id is not null
+SELECT
+  order_id,
+  customer_id,
+  order_date,
+  amount
+FROM ${ref("src_raw_orders")}
