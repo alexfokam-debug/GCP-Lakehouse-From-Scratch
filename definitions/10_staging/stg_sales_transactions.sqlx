@@ -6,12 +6,8 @@ config {
 }
 
 SELECT
-  -- IMPORTANT :
-  -- on aligne la clé de jointure avec le reste du modèle
   id AS order_id,
-
   amount AS transaction_amount,
-  transaction_ts,
   load_ts,
   record_source
-FROM ${ref("sales_transactions")}
+FROM `lakehouse-486419.raw_ext_dev.sales_transactions`
