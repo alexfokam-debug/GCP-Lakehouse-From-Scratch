@@ -13,9 +13,10 @@ SELECT
   o.order_ts,
   o.load_ts,
   o.record_source,
-  s.transaction_id,
+
   s.transaction_amount,
   s.transaction_ts
+
 FROM ${ref("stg_orders")} AS o
 LEFT JOIN ${ref("stg_sales_transactions")} AS s
   ON o.order_id = s.order_id

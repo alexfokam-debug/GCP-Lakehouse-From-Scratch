@@ -1,26 +1,17 @@
 config {
   type: "view",
-  schema: "analytics_dev",
+  schema: "analytics",
   name: "stg_sales_transactions",
-  tags: ["staging", "prod"]
+  description: "Staging view for sales transactions"
 }
 
-select
-  cast(id as string)                      as transaction_id,
-  cast(event_ts as timestamp)             as transaction_ts,
-  date(cast(event_ts as timestamp))       as order_date,
+SELECT
+  -- IMPORTANT :
+  -- on aligne la clé de jointure avec le reste du modèle
+  id AS order_id,
 
-  cast(name as string)                    as customer_id,
-  cast(name as string)                    as product_id,
-
-  cast(1 as int64)                        as qty,
-  cast(amount as numeric)                 as unit_price,
-
-  cast(amount as numeric)                 as amount,
-  "EUR"                                   as currency,
-  "FR"                                    as country,
-
-  current_timestamp()                     as ingestion_ts,
-  current_timestamp()                     as load_ts
-from ${ref("sales_transactions")}
-where id is not null
+  amount AS transaction_amount,
+  transaction_ts,
+  load_ts,
+  record_source
+FROM ${ref("sales_transactions")}
