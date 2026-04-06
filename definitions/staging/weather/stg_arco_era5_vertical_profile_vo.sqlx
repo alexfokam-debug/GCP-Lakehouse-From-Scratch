@@ -6,10 +6,16 @@ config {
 }
 
 SELECT
-  SAFE.TIMESTAMP_MICROS(time) AS timestamp_utc,
-  DATE(SAFE.TIMESTAMP_MICROS(time)) AS date,
+  -- On garde le champ brut pour debug
+  time,
+
+  -- On tente de reconstruire une date fiable à partir du nom du fichier
+  -- Exemple attendu : 19400101_hres_dve.grb2
+  PARSE_DATE('%Y%m%d', REGEXP_EXTRACT(source_file, r'^(\d{8})')) AS date,
+
   CAST(hybrid AS FLOAT64) AS hybrid,
   CAST(vo_mean AS FLOAT64) AS vo_mean,
   source_file
+
 FROM ${ref("src_arco_era5_vertical_profile_vo")}
 WHERE vo_mean IS NOT NULL

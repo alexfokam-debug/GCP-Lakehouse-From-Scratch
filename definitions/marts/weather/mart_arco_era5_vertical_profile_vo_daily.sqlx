@@ -1,6 +1,6 @@
 config {
   type: "view",
-  schema: "analytics_dev",
+  schema: "analytics",
   name: "mart_arco_era5_vertical_profile_vo_daily",
   tags: ["weather", "arco", "mart"]
 }
@@ -50,21 +50,20 @@ aggregated AS (
   - le minimum
   - le maximum
   - le nombre d'observations
-
-  Cela donne une première vue analytique exploitable.
   ---------------------------------------------------------------------------
   */
   SELECT
-    observation_date,
-    hybrid_level,
-    AVG(mean_relative_vorticity) AS avg_relative_vorticity,
-    MIN(mean_relative_vorticity) AS min_relative_vorticity,
-    MAX(mean_relative_vorticity) AS max_relative_vorticity,
+    date,
+    hybrid,
+    AVG(vo_mean) AS avg_relative_vorticity,
+    MIN(vo_mean) AS min_relative_vorticity,
+    MAX(vo_mean) AS max_relative_vorticity,
     COUNT(*) AS nb_records
   FROM staging
+  WHERE date IS NOT NULL
   GROUP BY
-    observation_date,
-    hybrid_level
+    date,
+    hybrid
 
 )
 
