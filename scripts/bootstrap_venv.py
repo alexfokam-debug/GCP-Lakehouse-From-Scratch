@@ -48,7 +48,7 @@ def main() -> int:
 
     # 1) requirements.txt obligatoire en entreprise (source-of-truth dépendances)
     if not REQ_FILE.exists():
-        print(f"❌ Missing {REQ_FILE}. Create it (see below).")
+        print(f" Missing {REQ_FILE}. Create it (see below).")
         return 1
 
     # 2) Upgrade pip (propre sur CI / Mac)
@@ -60,7 +60,7 @@ def main() -> int:
     # 4) Smoke test import (évite les surprises)
     run([sys.executable, "-c", "import yaml; print('PyYAML OK:', yaml.__version__)"])
 
-    print("✅ Python environment ready.")
+    print(" Python environment ready.")
     return 0
 
 

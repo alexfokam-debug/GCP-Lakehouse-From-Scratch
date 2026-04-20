@@ -28,4 +28,4 @@ terraform -chdir=terraform/lakehouse init -reconfigure \
 terraform -chdir=terraform/lakehouse validate
 terraform -chdir=terraform/lakehouse plan -var-file=envs/dev/terraform.tfvars -compact-warnings
 
-echo "✅ OK: local CI-like plan succeeded (dev)."
+echo " OK: local CI-like plan succeeded (dev)."

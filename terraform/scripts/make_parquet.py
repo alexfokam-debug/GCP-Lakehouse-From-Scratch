@@ -26,7 +26,7 @@ def write_parquet(df: pd.DataFrame, out_path: Path) -> None:
     table = pa.Table.from_pandas(df, preserve_index=False)
     pq.write_table(table, out_path)
 
-    print("✅ Parquet generated")
+    print(" Parquet generated")
     print(f"   path: {out_path.resolve()}")
     print(f"   size: {out_path.stat().st_size} bytes")
     print(f"   rows: {len(df)}")
@@ -45,7 +45,7 @@ def main() -> None:
     # donc on résout le chemin par rapport au CWD actuel.
     out_path = Path(args.out)
 
-    print("ℹ️ Running make_parquet.py")
+    print(" Running make_parquet.py")
     print(f"   cwd: {Path.cwd().resolve()}")
     print(f"   out: {out_path}")
 

@@ -100,7 +100,7 @@ def dataproc_iceberg(
     )
 
     typer.echo("")
-    typer.echo("✅ Dataproc batch submitted")
+    typer.echo(" Dataproc batch submitted")
     typer.echo(f" - batch_id : {res.batch_id}")
     typer.echo(f" - job_gcs  : {res.gcs_job_uri}")
 

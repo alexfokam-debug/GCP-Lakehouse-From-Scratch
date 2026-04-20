@@ -148,7 +148,7 @@ def promote() -> None:
         # mais avec des préfixes différents.
         bucket.copy_blob(blob, bucket, target_path)
 
-    print("✅ Promotion landing -> raw terminée")
+    print("Promotion landing -> raw terminée")
 
 
 # =============================================================================

@@ -74,7 +74,7 @@ output "biglake_connection_sa" {
 # -----------------------------------------------------------------------------
 # (4) Dataform
 # -----------------------------------------------------------------------------
-# ⚠️ Seulement si ton module dataform expose bien repository_name.
+# Seulement si ton module dataform expose bien repository_name.
 # Sinon : supprime cet output ou remplace par le bon output du module.
 output "dataform_repository_name" {
   description = "Nom complet du repository Dataform."

@@ -160,11 +160,11 @@ def main() -> int:
     print("")
 
     if bucket_exists(bucket_name):
-        print(f"✅ Bucket existe déjà : gs://{bucket_name}")
-        print("➡️ Tu peux relancer : make tf-plan ENV=staging")
+        print(f" Bucket existe déjà : gs://{bucket_name}")
+        print(" Tu peux relancer : make tf-plan ENV=staging")
         return 0
 
-    print(f"⚠️ Bucket absent, création en cours : gs://{bucket_name}")
+    print(f" Bucket absent, création en cours : gs://{bucket_name}")
     try:
         create_bucket(args.project, args.location, bucket_name)
     except Exception as e:
@@ -172,8 +172,8 @@ def main() -> int:
         print(str(e))
         return 1
 
-    print(f"✅ Bucket créé + versioning activé : gs://{bucket_name}")
-    print("➡️ Relance maintenant :")
+    print(f" Bucket créé + versioning activé : gs://{bucket_name}")
+    print(" Relance maintenant :")
     print(f"   make tf-plan ENV={args.env}")
     return 0
 

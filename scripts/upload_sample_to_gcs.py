@@ -9,7 +9,7 @@ But
 Uploader `data/sample.parquet` dans un bucket GCS au chemin attendu
 par ta table externe BigQuery (sinon erreur: "matched no files").
 
-✅ Compatible avec ta commande actuelle (avec --dst).
+ Compatible avec ta commande actuelle (avec --dst).
 
 Usage (identique à ton script actuel)
 -------------------------------------
@@ -56,12 +56,12 @@ def ensure_local_file(src: Path) -> None:
     if not src.exists():
         raise FileNotFoundError(
             f"[ERREUR] Fichier introuvable: {src}\n"
-            f"👉 Vérifie le chemin --src et que le fichier existe bien."
+            f" Vérifie le chemin --src et que le fichier existe bien."
         )
     if not src.is_file():
         raise ValueError(
             f"[ERREUR] Le chemin --src n'est pas un fichier: {src}\n"
-            f"👉 Donne un fichier .parquet valide."
+            f" Donne un fichier .parquet valide."
         )
 
 
@@ -76,13 +76,13 @@ def ensure_bucket_access(client: storage.Client, bucket_name: str) -> storage.Bu
     except NotFound as e:
         raise RuntimeError(
             f"[ERREUR] Bucket inexistant: gs://{bucket_name}\n"
-            f"👉 Terraform a peut-être ciblé un autre projet/env ou tu as un mauvais nom de bucket.\n"
+            f" Terraform a peut-être ciblé un autre projet/env ou tu as un mauvais nom de bucket.\n"
             f"Détail: {e}"
         ) from e
     except Forbidden as e:
         raise RuntimeError(
             f"[ERREUR] Accès interdit au bucket: gs://{bucket_name}\n"
-            f"👉 Vérifie ton auth (gcloud ADC) et tes rôles IAM.\n"
+            f" Vérifie ton auth (gcloud ADC) et tes rôles IAM.\n"
             f"Détail: {e}"
         ) from e
 
@@ -105,7 +105,7 @@ def upload(bucket: storage.Bucket, src: Path, dst: str) -> None:
 
     # Vérif post-upload (taille, génération) = pratique en mode entreprise
     blob.reload()
-    print(f"✅ Upload terminé | size={blob.size} bytes | generation={blob.generation}")
+    print(f"Upload terminé | size={blob.size} bytes | generation={blob.generation}")
 
 
 def main() -> int:
@@ -127,7 +127,7 @@ def main() -> int:
 
     # 5) Commande utile pour vérifier rapidement
     print("-------------------------------------")
-    print("➡️ Vérifie avec :")
+    print(" Vérifie avec :")
     print(f"   gsutil ls -r gs://{args.bucket}/{args.dst.rsplit('/', 1)[0]}/")
     return 0
 
@@ -136,5 +136,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as e:
-        print(f"\n🔥 Échec: {e}", file=sys.stderr)
+        print(f"\n Échec: {e}", file=sys.stderr)
         raise SystemExit(1)

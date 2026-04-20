@@ -251,9 +251,9 @@ def copy_sample_to_landing() -> None:
         # ---------------------------------------------------------------------
         rewrite_blob(source_blob, destination_blob)
 
-        print("    ✅ Copie terminée")
+        print("Copie terminée")
 
-    print("✅ Copie vers landing terminée pour tout l'échantillon")
+    print("Copie vers landing terminée pour tout l'échantillon")
 
 
 # =============================================================================

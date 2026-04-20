@@ -20,5 +20,5 @@ tf_state_bucket_name = "lakehouse-terraform-states-486419"
 bootstrap_ci_iam = false
 manage_wif       = true
 
-# ✅ Autorise les PR (refs/pull/...) dans la condition WIF
+#  Autorise les PR (refs/pull/...) dans la condition WIF
 allow_pull_request = true

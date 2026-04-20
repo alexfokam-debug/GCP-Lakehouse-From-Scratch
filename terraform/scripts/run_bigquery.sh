@@ -129,11 +129,11 @@ for layer in "${layers[@]}"; do
 
   layer_dir="${SQL_ROOT}/${layer}"
   qlog ""
-  qlog "▶️  Layer: ${layer}"
+  qlog "  Layer: ${layer}"
   qlog "   Dossier: ${layer_dir}"
 
   if [[ ! -d "${layer_dir}" ]]; then
-    qlog "⚠️  Dossier absent, ignoré: ${layer_dir}"
+    qlog "  Dossier absent, ignoré: ${layer_dir}"
   else
     # List .sql and .sql.tpl (compatible macOS bash 3.2 : pas de mapfile)
     files=()
@@ -179,4 +179,4 @@ for layer in "${layers[@]}"; do
 done
 
 qlog ""
-qlog "🎉 Terminé. Tous les scripts SQL ont été exécutés (si présents)."
+qlog " Terminé. Tous les scripts SQL ont été exécutés (si présents)."

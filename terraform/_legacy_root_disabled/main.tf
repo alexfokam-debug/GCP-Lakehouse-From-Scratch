@@ -479,7 +479,7 @@ module "gcs_dataproc_temp" {
   domain       = var.domain
   dataset_name = var.dataset_name
 
-  # ✅ correction naming
+  # correction naming
   bucket_name = "lakehouse-${var.project_id_short}-dataproc-temp-${var.environment}"
 }
 

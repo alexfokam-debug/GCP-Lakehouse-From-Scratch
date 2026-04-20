@@ -116,7 +116,7 @@ def main() -> int:
     )
 
     invocation_name = created.name
-    print(f"✅ Invocation créée : {invocation_name}")
+    print(f" Invocation créée : {invocation_name}")
 
     # ----------------------------------------------------------------
     # 3) Polling: on attend la fin (SUCCEEDED / FAILED / CANCELLED)
@@ -135,12 +135,12 @@ def main() -> int:
         # - RUNNING / SUCCEEDED / FAILED / CANCELLED
         state = dataform_v1beta1.WorkflowInvocation.State(inv.state).name
 
-        print(f"⏳ State={state} ...")
+        print(f" State={state} ...")
         if state in {"SUCCEEDED"}:
-            print("✅ Workflow terminé avec succès.")
+            print(" Workflow terminé avec succès.")
             return 0
         if state in {"FAILED", "CANCELLED"}:
-            print("❌ Workflow en échec ou annulé.")
+            print(" Workflow en échec ou annulé.")
             print(f"Details: {inv}")
             return 2
 

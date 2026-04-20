@@ -46,7 +46,7 @@ def load_tfvars(env: str) -> Dict[str, str]:
     """
     Lit terraform/envs/<env>/terraform.tfvars et récupère les variables simples.
 
-    ⚠️ On gère ici uniquement le cas "key = \"value\""
+     On gère ici uniquement le cas "key = \"value\""
     C'est largement suffisant pour project_id/location.
     """
     path = os.path.join("terraform", "envs", env, "terraform.tfvars")
@@ -146,17 +146,17 @@ def main() -> int:
 
     entries: List[bigquery.AccessEntry] = list(dataset.access_entries or [])
 
-    print(f"ℹ️  Access entries (avant) : {len(entries)}")
+    print(f"  Access entries (avant) : {len(entries)}")
 
     invalid = [e for e in entries if is_invalid_access_entry(e)]
     valid = [e for e in entries if not is_invalid_access_entry(e)]
 
-    print(f"⚠️  Entrées invalides : {len(invalid)}")
-    print(f"✅ Entrées valides   : {len(valid)}")
+    print(f"  Entrées invalides : {len(invalid)}")
+    print(f" Entrées valides   : {len(valid)}")
     print("")
 
     if not invalid:
-        print("✅ Rien à nettoyer. Tu peux relancer Terraform.")
+        print(" Rien à nettoyer. Tu peux relancer Terraform.")
         return 0
 
     print("---- Entrées supprimées ----")
@@ -165,7 +165,7 @@ def main() -> int:
     print("----------------------------\n")
 
     if args.dry_run:
-        print("🟡 Dry-run: aucune modification envoyée.")
+        print(" Dry-run: aucune modification envoyée.")
         return 0
 
     # ============================================================
@@ -174,8 +174,8 @@ def main() -> int:
     dataset.access_entries = valid
     client.update_dataset(dataset, ["access_entries"])
 
-    print("✅ Nettoyage appliqué.")
-    print(f"➡️ Relance maintenant : make tf-apply ENV={args.env}")
+    print(" Nettoyage appliqué.")
+    print(f" Relance maintenant : make tf-apply ENV={args.env}")
     return 0
 
 

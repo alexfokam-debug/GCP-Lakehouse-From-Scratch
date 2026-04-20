@@ -111,12 +111,12 @@ def check_local_file_exists(src: Path) -> None:
     if not src.exists():
         raise FileNotFoundError(
             f"[ERREUR] Fichier introuvable: {src}\n"
-            f"👉 Vérifie que `data/sample.parquet` existe bien dans ton repo."
+            f" Vérifie que `data/sample.parquet` existe bien dans ton repo."
         )
     if not src.is_file():
         raise ValueError(
             f"[ERREUR] Le chemin fourni n'est pas un fichier: {src}\n"
-            f"👉 Donne un fichier .parquet valide."
+            f" Donne un fichier .parquet valide."
         )
 
 
@@ -137,14 +137,14 @@ def check_bucket_access(client: storage.Client, bucket_name: str) -> storage.Buc
     except NotFound as e:
         raise RuntimeError(
             f"[ERREUR] Bucket GCS introuvable: gs://{bucket_name}\n"
-            f"👉 Soit Terraform ne l'a pas créé, soit tu n'es pas dans le bon projet.\n"
+            f" Soit Terraform ne l'a pas créé, soit tu n'es pas dans le bon projet.\n"
             f"Détail: {e}"
         ) from e
 
     except Forbidden as e:
         raise RuntimeError(
             f"[ERREUR] Accès interdit au bucket: gs://{bucket_name}\n"
-            f"👉 Vérifie tes droits IAM et ton auth gcloud.\n"
+            f" Vérifie tes droits IAM et ton auth gcloud.\n"
             f"Détail: {e}"
         ) from e
 
@@ -165,14 +165,14 @@ def upload_file(bucket: storage.Bucket, src: Path, gcs_object_path: str) -> None
     blob = bucket.blob(gcs_object_path)
 
     # Log entreprise: on affiche exactement ce qu'on fait
-    print(f"➡️ Upload: {src}  ->  gs://{bucket.name}/{gcs_object_path}")
+    print(f" Upload: {src}  ->  gs://{bucket.name}/{gcs_object_path}")
 
     # Upload simple (pour gros volumes, on pourrait gérer chunking / resumable)
     blob.upload_from_filename(str(src))
 
     # Vérification / log: taille et génération (version)
     blob.reload()
-    print(f"✅ Upload OK | size={blob.size} bytes | generation={blob.generation}")
+    print(f" Upload OK | size={blob.size} bytes | generation={blob.generation}")
 
 
 def main() -> int:
@@ -215,9 +215,9 @@ def main() -> int:
 
     # 6) Message final actionnable
     print("----------------------------------------------")
-    print("➡️ Vérifie maintenant avec :")
+    print(" Vérifie maintenant avec :")
     print(f"   gsutil ls -r gs://{args.bucket}/domain={args.domain}/dataset={args.dataset}/")
-    print("✅ Étape RAW terminée.")
+    print(" Étape RAW terminée.")
     return 0
 
 

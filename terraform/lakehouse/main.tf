@@ -7,15 +7,15 @@ Objectif (stack "data platform") :
 - C’est la couche “produit data” (Raw/Silver/Curated/Analytics, Dataplex, Dataform...)
 
 Contenu :
-✅ GCS : raw / curated / iceberg / scripts / dataproc-temp
-✅ BigQuery : datasets, external tables, BigLake connection
-✅ Dataplex : lake + zones + assets
-✅ Dataform : repository + workflows
-✅ Bootstrap files : pour éviter “matched no files” sur external tables
+ GCS : raw / curated / iceberg / scripts / dataproc-temp
+ BigQuery : datasets, external tables, BigLake connection
+ Dataplex : lake + zones + assets
+ Dataform : repository + workflows
+ Bootstrap files : pour éviter “matched no files” sur external tables
 
 Ce que LAKEHOUSE ne doit PAS gérer :
-❌ WIF pool/provider GitHub (ça = security foundation)
-❌ IAM global “entreprise”
+ WIF pool/provider GitHub (ça = security foundation)
+ IAM global “entreprise”
 => Ces sujets restent dans FOUNDATION
 
 Note IAM dans LAKEHOUSE :
@@ -435,7 +435,7 @@ module "dataform" {
 # Problème : external tables peuvent échouer si le wildcard ne match aucun fichier
 # Solution : uploader un petit parquet sample pour garantir 1 match
 #
-# ⚠️ Important : source doit être stable. Si tu changes le chemin,
+#  Important : source doit être stable. Si tu changes le chemin,
 # Terraform remplace l’objet (c’est ce que tu as vu dans tes plans).
 # =============================================================================
 resource "google_storage_bucket_object" "bootstrap_orders_parquet" {
@@ -446,7 +446,7 @@ resource "google_storage_bucket_object" "bootstrap_orders_parquet" {
   name   = "domain=${var.domain}/dataset=orders/orders_0001.parquet"
   bucket = module.gcs_raw.bucket_name
 
-  # ✅ path.module => stable depuis ce fichier, même si tu changes le cwd
+  #  path.module => stable depuis ce fichier, même si tu changes le cwd
   source = "${path.module}/../../data/sample.parquet"
 
   # -----------------------------------------------------------------------

@@ -7,16 +7,16 @@ Objectif :
 - Ce qui permet ensuite à Lakehouse de se déployer proprement
 
 Contenu typique :
-✅ Activation des APIs (prérequis)
-✅ Labels projet “global”
-✅ IAM / WIF GitHub CI/CD + Service Accounts (Dataform/Dataproc/GitHub)
-✅ Bootstrapping CI : droits sur backend bucket terraform + secrets
+ Activation des APIs (prérequis)
+ Labels projet “global”
+ IAM / WIF GitHub CI/CD + Service Accounts (Dataform/Dataproc/GitHub)
+ Bootstrapping CI : droits sur backend bucket terraform + secrets
 
 Ce que FOUNDATION ne doit PAS contenir :
-❌ Datasets BigQuery
-❌ Buckets data (raw/curated/iceberg/scripts/temp)
-❌ Dataplex lake/zones/assets
-❌ Dataform repository/workflows
+ Datasets BigQuery
+ Buckets data (raw/curated/iceberg/scripts/temp)
+ Dataplex lake/zones/assets
+ Dataform repository/workflows
 => tout ça va dans LAKEHOUSE
 
 Pourquoi ?

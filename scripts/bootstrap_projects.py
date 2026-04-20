@@ -70,7 +70,7 @@ def warn(msg: str) -> None:
 
 
 def fatal(msg: str) -> None:
-    print(f"❌ {msg}", file=sys.stderr, flush=True)
+    print(f" {msg}", file=sys.stderr, flush=True)
 
 
 # =============================================================================
@@ -412,7 +412,7 @@ def enable_apis(project_id: str, apis: List[str]) -> None:
     missing = [a for a in apis if a not in enabled]
 
     if not missing:
-        info("[SKIP] All APIs already enabled ✅")
+        info("[SKIP] All APIs already enabled ")
         return
 
     # Commande unique avec toutes les APIs manquantes (plus rapide & pro)
@@ -422,7 +422,7 @@ def enable_apis(project_id: str, apis: List[str]) -> None:
         capture=True,
         timeout_s=600,  # peut être long selon le compte
     )
-    info(f"[OK] Enabled APIs: {', '.join(missing)} ✅")
+    info(f"[OK] Enabled APIs: {', '.join(missing)} ")
 
 
 # =============================================================================
@@ -475,7 +475,7 @@ def set_project_labels_best_effort(project_id: str, labels: Dict[str, str], env_
         p = run_cmd(cmd, check=False, capture=True, timeout_s=120)
 
         if p.returncode == 0:
-            info(f"[OK] Labels applied via {track} ✅")
+            info(f"[OK] Labels applied via {track} ")
             return
 
         # On mémorise l'erreur pour la sortir en WARN (utile debug)
@@ -510,17 +510,17 @@ def bootstrap_env(envp: EnvProject, billing_account_id: str, apis: List[str], la
 
     # 1) Project
     if project_exists(envp.project_id):
-        info("[SKIP] Project already exists ✅")
+        info("[SKIP] Project already exists ")
     else:
         create_project(envp.project_id)
-        info("[OK] Project created ✅")
+        info("[OK] Project created ")
 
     # 2) Billing
     if billing_is_linked(envp.project_id):
-        info("[SKIP] Billing already linked ✅")
+        info("[SKIP] Billing already linked ")
     else:
         link_billing(envp.project_id, billing_account_id)
-        info("[OK] Billing linked ✅")
+        info("[OK] Billing linked ")
 
     # 3) APIs
     enable_apis(envp.project_id, apis)
@@ -528,7 +528,7 @@ def bootstrap_env(envp: EnvProject, billing_account_id: str, apis: List[str], la
     # 4) Labels (best effort)
     set_project_labels_best_effort(envp.project_id, labels, envp.environment_label)
 
-    info(f"[OK] {envp.env_name} bootstrap done ✅")
+    info(f"[OK] {envp.env_name} bootstrap done ")
 
 
 # =============================================================================
@@ -570,7 +570,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             fatal(f"Bootstrap failed for {envp.env_name}: {ex}")
             return 1
 
-    info("\n✅ Bootstrap completed for all environments.")
+    info("\nBootstrap completed for all environments.")
     return 0
 
 

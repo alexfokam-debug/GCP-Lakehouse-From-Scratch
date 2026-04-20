@@ -85,17 +85,17 @@ jobs:
           set -euo pipefail
 
           if [[ -z "${PROJECT_ID:-}" ]]; then
-            echo "❌ Missing vars.GCP_PROJECT_ID in GitHub Environment '${{ inputs.environment }}'"
+            echo " Missing vars.GCP_PROJECT_ID in GitHub Environment '${{ inputs.environment }}'"
             exit 1
           fi
 
           if [[ -z "${TF_BUCKET:-}" ]]; then
-            echo "❌ Missing vars.TF_STATE_BUCKET in GitHub Environment '${{ inputs.environment }}'"
+            echo " Missing vars.TF_STATE_BUCKET in GitHub Environment '${{ inputs.environment }}'"
             exit 1
           fi
 
-          echo "✅ PROJECT_ID(raw)='${PROJECT_ID}'"
-          echo "✅ TF_BUCKET(raw)='${TF_BUCKET}'"
+          echo " PROJECT_ID(raw)='${PROJECT_ID}'"
+          echo " TF_BUCKET(raw)='${TF_BUCKET}'"
 
       # ==========================================================
       # 3) Sanitize inputs (anti CR/LF + trim)
@@ -109,19 +109,19 @@ jobs:
           TF_BUCKET_CLEAN="$(printf '%s' "${TF_BUCKET}" | tr -d '\r\n' | xargs)"
 
           if [[ -z "${PROJECT_ID_CLEAN}" ]]; then
-            echo "❌ PROJECT_ID empty after sanitize"
+            echo " PROJECT_ID empty after sanitize"
             exit 1
           fi
           if [[ -z "${TF_BUCKET_CLEAN}" ]]; then
-            echo "❌ TF_BUCKET empty after sanitize"
+            echo " TF_BUCKET empty after sanitize"
             exit 1
           fi
 
           echo "PROJECT_ID=${PROJECT_ID_CLEAN}" >> "$GITHUB_ENV"
           echo "TF_BUCKET=${TF_BUCKET_CLEAN}"   >> "$GITHUB_ENV"
 
-          echo "✅ PROJECT_ID(clean)='${PROJECT_ID_CLEAN}'"
-          echo "✅ TF_BUCKET(clean)='${TF_BUCKET_CLEAN}'"
+          echo " PROJECT_ID(clean)='${PROJECT_ID_CLEAN}'"
+          echo " TF_BUCKET(clean)='${TF_BUCKET_CLEAN}'"
 
       # ==========================================================
       # 4) Secrets check
@@ -136,10 +136,10 @@ jobs:
 
           if [[ -z "${{ secrets.GCP_WIF_PROVIDER }}" || -z "${{ secrets.GCP_WIF_SA }}" ]]; then
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ WIF secrets NOT available (fork PR / dependabot / env not attached)."
+            echo "⚠ WIF secrets NOT available (fork PR / dependabot / env not attached)."
           else
             echo "available=true" >> "$GITHUB_OUTPUT"
-            echo "✅ WIF secrets available."
+            echo " WIF secrets available."
           fi
 
       # ==========================================================
@@ -220,7 +220,7 @@ jobs:
         run: |
           set -euo pipefail
           cd terraform/foundation
-          # ✅ robust: si aucun fichier, on ne crash pas
+          #  robust: si aucun fichier, on ne crash pas
           files=$(find . -type f -name "*.tf" -print)
           if [[ -n "${files}" ]]; then
             terraform fmt -check -recursive ${files}
@@ -311,5 +311,5 @@ jobs:
         if: steps.secrets_check.outputs.available == 'false'
         shell: bash
         run: |
-          echo "ℹ️ Skipping Terraform because WIF secrets are not available (fork PR / Dependabot)."
+          echo " Skipping Terraform because WIF secrets are not available (fork PR / Dependabot)."
           echo "Enterprise-standard behavior: avoid leaking secrets."

@@ -60,32 +60,32 @@ def main() -> int:
     # 1) Vérifier que la table existe
     try:
         tbl = client.get_table(table_ref)
-        print(f"✅ Table trouvée : {tbl.full_table_id}")
-        print(f"ℹ️  Type table   : {tbl.table_type}")
-        print(f"ℹ️  Colonnes     : {len(tbl.schema)}")
+        print(f" Table trouvée : {tbl.full_table_id}")
+        print(f"  Type table   : {tbl.table_type}")
+        print(f"  Colonnes     : {len(tbl.schema)}")
     except NotFound:
-        print(f"❌ Table introuvable : {table_ref}")
+        print(f" Table introuvable : {table_ref}")
         return 1
 
     # 2) Vérifier qu'il y a des lignes
     count_sql = f"SELECT COUNT(1) AS cnt FROM `{table_ref}`"
     try:
         cnt = list(client.query(count_sql).result())[0]["cnt"]
-        print(f"ℹ️  Row count = {cnt}")
+        print(f"  Row count = {cnt}")
     except BadRequest as e:
-        print(f"❌ Query COUNT failed: {e}")
+        print(f" Query COUNT failed: {e}")
         return 1
 
     if cnt < args.min_rows:
-        print(f"❌ Pas assez de lignes: {cnt} < {args.min_rows}")
+        print(f" Pas assez de lignes: {cnt} < {args.min_rows}")
         return 1
 
     # 3) Petite preview (smoke-test)
     preview_sql = f"SELECT * FROM `{table_ref}` LIMIT {args.limit}"
     rows = list(client.query(preview_sql).result())
-    print(f"✅ Preview OK. Lignes récupérées : {len(rows)}")
+    print(f" Preview OK. Lignes récupérées : {len(rows)}")
     if rows:
-        print("ℹ️  Exemple 1ère ligne (dict) :")
+        print("  Exemple 1ère ligne (dict) :")
         print(dict(rows[0]))
 
     return 0

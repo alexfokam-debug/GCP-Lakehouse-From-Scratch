@@ -38,24 +38,24 @@ def main() -> int:
     # dataset check
     ds_ref = bigquery.DatasetReference(project_id, dataset_id)
     client.get_dataset(ds_ref)
-    print(f"✅ Dataset trouvé : {project_id}:{dataset_id}")
+    print(f" Dataset trouvé : {project_id}:{dataset_id}")
 
     # table check
     table_ref = ds_ref.table(args.table)
     table_obj = client.get_table(table_ref)
-    print(f"✅ Table trouvée : {project_id}:{dataset_id}.{args.table}")
-    print(f"ℹ️  Type table : {table_obj.table_type}")
-    print(f"ℹ️  Schéma : {len(table_obj.schema)} colonnes")
+    print(f" Table trouvée : {project_id}:{dataset_id}.{args.table}")
+    print(f"  Type table : {table_obj.table_type}")
+    print(f"  Schéma : {len(table_obj.schema)} colonnes")
 
     sql = f"SELECT * FROM `{project_id}.{dataset_id}.{args.table}` LIMIT {args.limit}"
-    print("ℹ️  Lancement requête de test :")
-    print(f"ℹ️  {sql}")
+    print("  Lancement requête de test :")
+    print(f"  {sql}")
 
     rows = list(client.query(sql).result())
-    print(f"✅ Query OK. Lignes récupérées : {len(rows)}")
+    print(f"Query OK. Lignes récupérées : {len(rows)}")
     if rows:
-        print("ℹ️  Exemple 1ère ligne (dict) :")
-        print(f"ℹ️  {dict(rows[0])}")
+        print("  Exemple 1ère ligne (dict) :")
+        print(f"  {dict(rows[0])}")
 
     return 0
 

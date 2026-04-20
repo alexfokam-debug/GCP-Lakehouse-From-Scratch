@@ -76,7 +76,7 @@ def log(msg: str) -> None:
 
 def die(msg: str, code: int = 1) -> None:
     """Stop contrôlé avec code exit."""
-    log(f"❌ {msg}")
+    log(f" {msg}")
     raise SystemExit(code)
 
 
@@ -159,13 +159,13 @@ def workflow_config_path(project: str, location: str, repo: str, workflow: str) 
 # -----------------------------
 def get_workflow_config(token: str, wf_path: str) -> Dict[str, Any]:
     url = f"{DATAFORM_API}/{wf_path}"
-    log(f"ℹ️  GET WorkflowConfig: {url}")
+    log(f"  GET WorkflowConfig: {url}")
     return http_get(url, token)
 
 
 def get_release_config(token: str, rel_path: str) -> Dict[str, Any]:
     url = f"{DATAFORM_API}/{rel_path}"
-    log(f"ℹ️  GET ReleaseConfig: {url}")
+    log(f" GET ReleaseConfig: {url}")
     return http_get(url, token)
 
 
@@ -214,7 +214,7 @@ def create_compilation_result_for_release(
     comp_name = resp.get("name")
     if not comp_name:
         die("CompilationResult créée mais champ 'name' absent de la réponse.")
-    log(f"✅ CompilationResult créée: {comp_name}")
+    log(f" CompilationResult créée: {comp_name}")
     return comp_name
 
 
@@ -232,11 +232,11 @@ def patch_release_config_set_compilation(
         "releaseCompilationResult": compilation_result_name,
     }
 
-    log("🧩 PATCH ReleaseConfig.releaseCompilationResult")
+    log(" PATCH ReleaseConfig.releaseCompilationResult")
     log(f"  url : {url}")
     log(f"  comp: {compilation_result_name}")
     http_patch(url, token, body)
-    log("✅ ReleaseConfig patchée.")
+    log(" ReleaseConfig patchée.")
 
 
 # -----------------------------
@@ -249,7 +249,7 @@ def create_workflow_invocation(token: str, project: str, location: str, repo: st
     url = f"{DATAFORM_API}/{repo_path(project, location, repo)}/workflowInvocations"
     body = {"workflowConfig": wf_path}
 
-    log("🚀 POST create WorkflowInvocation")
+    log(" POST create WorkflowInvocation")
     log(f"  url : {url}")
     log(f"  body: {body}")
     resp = http_post(url, token, body)
@@ -257,7 +257,7 @@ def create_workflow_invocation(token: str, project: str, location: str, repo: st
     inv_name = resp.get("name")
     if not inv_name:
         die("WorkflowInvocation créée mais champ 'name' absent de la réponse.")
-    log(f"✅ WorkflowInvocation créée: {inv_name}")
+    log(f" WorkflowInvocation créée: {inv_name}")
     return inv_name
 
 
@@ -282,14 +282,14 @@ def print_failed_actions(token: str, inv_name: str) -> None:
     try:
         payload = query_workflow_invocation(token, inv_name)
     except Exception as e:
-        log(f"⚠️  Impossible de query les erreurs d'actions: {e}")
+        log(f"  Impossible de query les erreurs d'actions: {e}")
         return
 
     actions: List[Dict[str, Any]] = payload.get("workflowInvocationActions") or []
     failed = [a for a in actions if a.get("state") == "FAILED"]
 
     if not failed:
-        log("ℹ️  Aucune action FAILED détaillée trouvée via :query.")
+        log("  Aucune action FAILED détaillée trouvée via :query.")
         return
 
     log("----- FAILED ACTIONS (Dataform) -----")
@@ -315,7 +315,7 @@ def poll_until_done(token: str, inv_name: str, timeout_sec: int, poll_sec: int) 
         # Si état terminal
         if state in TERMINAL_STATES:
             if state == "SUCCEEDED":
-                log("✅ Workflow SUCCEEDED")
+                log(" Workflow SUCCEEDED")
                 return
 
             # Si FAILED/CANCELLED : on imprime un détail action-level
@@ -371,7 +371,7 @@ def main() -> int:
     print(f"Workflow: {args.workflow}")
     print(f"Timeout : {args.timeout_sec}s | Poll: {args.poll_sec}s")
     print("")
-    log(f"ℹ️  WorkflowConfig path: {wf_path}")
+    log(f"  WorkflowConfig path: {wf_path}")
 
     # 4) Auth
     token = get_access_token()
@@ -383,18 +383,18 @@ def main() -> int:
     if not release_cfg_name:
         die("WorkflowConfig ne contient pas 'releaseConfig'. Vérifie ton workflow terraform.")
 
-    log(f"ℹ️  ReleaseConfig liée: {release_cfg_name}")
+    log(f"  ReleaseConfig liée: {release_cfg_name}")
 
     # 6) GET ReleaseConfig -> si pas compilée, bootstrap compilation
     rel = get_release_config(token, release_cfg_name)
     release_comp = rel.get("releaseCompilationResult")
 
     if not release_comp:
-        log("⚠️  ReleaseConfig.releaseCompilationResult vide → bootstrap compilation...")
+        log("  ReleaseConfig.releaseCompilationResult vide → bootstrap compilation...")
         comp_name = create_compilation_result_for_release(token, project, location, repo, rel)
         patch_release_config_set_compilation(token, release_cfg_name, comp_name)
     else:
-        log(f"✅ ReleaseConfig déjà compilée: {release_comp}")
+        log(f" ReleaseConfig déjà compilée: {release_comp}")
 
     # 7) Create invocation + poll
     inv_name = create_workflow_invocation(token, project, location, repo, wf_path)

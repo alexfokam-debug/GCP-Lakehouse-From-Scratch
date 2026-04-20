@@ -203,7 +203,7 @@ def read_bigquery_table(spark: SparkSession, project_id: str, raw_table: str, te
     )
     # En prod, éviter df.count() (ça déclenche un full scan).
     # Ici on log juste le schema + un sample.
-    log("BigQuery read OK ✅")
+    log("BigQuery read OK ")
     log("Schema:")
     df.printSchema()
 
@@ -226,7 +226,7 @@ def ensure_namespace(spark: SparkSession, iceberg_namespace: str) -> None:
 
     try:
         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {iceberg_namespace}")
-        log("Namespace OK ✅")
+        log("Namespace OK ")
     except Exception:
         log("[WARN] CREATE NAMESPACE failed (not blocking if already exists).")
         log(traceback.format_exc())
@@ -245,7 +245,7 @@ def write_iceberg_writeTo(df, iceberg_fqn: str) -> None:
     # En prod, tu peux préférer .create() + gérer le mode update séparément
     df.writeTo(iceberg_fqn).createOrReplace()
 
-    log("Iceberg writeTo OK ✅")
+    log("Iceberg writeTo OK ")
 
 
 def write_iceberg_sql_ctas(df, spark: SparkSession, iceberg_fqn: str) -> None:
@@ -270,7 +270,7 @@ def write_iceberg_sql_ctas(df, spark: SparkSession, iceberg_fqn: str) -> None:
         AS SELECT * FROM {tmp_view}
     """)
 
-    log("Iceberg SQL CTAS OK ✅")
+    log("Iceberg SQL CTAS OK ")
 
 
 # ------------------------------------------------------------------------------
@@ -315,11 +315,11 @@ def main() -> None:
             log(traceback.format_exc())
             write_iceberg_sql_ctas(df, spark, iceberg_fqn)
 
-        banner("Iceberg writer job - SUCCESS ✅")
+        banner("Iceberg writer job - SUCCESS ")
         log(f"End time UTC: {datetime.utcnow().isoformat()}Z")
 
     except Exception:
-        banner("Iceberg writer job - FAILED ❌")
+        banner("Iceberg writer job - FAILED ")
         log(traceback.format_exc())
         sys.exit(1)
 

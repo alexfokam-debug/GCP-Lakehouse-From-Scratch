@@ -53,27 +53,27 @@ def main() -> int:
     try:
         table = client.get_table(table_ref)
     except Exception as e:
-        print(f"❌ Table introuvable : {table_ref}")
-        print(f"❌ {e}")
+        print(f" Table introuvable : {table_ref}")
+        print(f" {e}")
         return 2
 
-    print(f"✅ Table trouvée : {table.project}:{table.dataset_id}.{table.table_id}")
+    print(f" Table trouvée : {table.project}:{table.dataset_id}.{table.table_id}")
 
     # 2) Row count (cheap)
     sql_count = f"SELECT COUNT(1) AS cnt FROM `{table_ref}`"
     cnt = list(client.query(sql_count).result())[0]["cnt"]
-    print(f"ℹ️  Row count = {cnt}")
+    print(f"  Row count = {cnt}")
 
     if cnt < args.min_rows:
-        print(f"❌ Pas assez de lignes: {cnt} < min={args.min_rows}")
+        print(f" Pas assez de lignes: {cnt} < min={args.min_rows}")
         return 3
 
     # 3) Preview rows
     sql_preview = f"SELECT * FROM `{table_ref}` LIMIT {args.limit}"
     rows = list(client.query(sql_preview).result())
-    print(f"✅ Preview OK. Lignes récupérées : {len(rows)}")
+    print(f" Preview OK. Lignes récupérées : {len(rows)}")
     if rows:
-        print(f"ℹ️  Exemple 1ère ligne : {dict(rows[0])}")
+        print(f"  Exemple 1ère ligne : {dict(rows[0])}")
 
     return 0
 

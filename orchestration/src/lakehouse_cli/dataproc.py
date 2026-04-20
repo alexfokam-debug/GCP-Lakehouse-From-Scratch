@@ -18,12 +18,12 @@ Notes importantes (ton contexte)
 --------------------------------
 - Dataproc Serverless runtime 2.2 => Spark 3.5.x
 - Iceberg doit matcher Spark 3.5 :
-    ✅ org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:<version>
+     org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:<version>
 - `gcloud --properties` est une *valeur de type dict*.
   Problème classique : les valeurs contenant des virgules (ex: spark.jars.packages=...,...)
   sont mal parsées par gcloud si on envoie du "k=v,k=v".
 
-  ✅ Solution robuste : utiliser le *custom delimiter* de gcloud :
+   Solution robuste : utiliser le *custom delimiter* de gcloud :
       --properties=^|^k=v|k=v|k=v
   Ici:
   - '^|^' signifie : "je change le séparateur du dict"
@@ -36,7 +36,7 @@ On complète automatiquement `spark.jars.packages` avec :
 - scala-library (Scala 2.12)
 - spark-bigquery-with-dependencies (Scala 2.12)
 
-⚠️ Remarque terrain :
+ Remarque terrain :
 - Sur Dataproc Serverless, le BigQuery connector est souvent déjà présent.
   Ajouter une autre version peut provoquer des conflits.
   => on garde l’ajout par défaut (comme tu veux), mais tu as un switch pour le désactiver
@@ -210,7 +210,7 @@ def _append_required_packages(
     - Spark 3.5 / Scala 2.12
     - Scala lib (2.12.18) et BQ connector (0.36.4) "recommandés" dans ton contexte.
 
-    ⚠️ Attention :
+ Attention :
     - Dataproc Serverless embarque souvent déjà le connector BigQuery.
       Si tu vois des erreurs de type "not a subtype" / ServiceConfigurationError,
       désactive l’ajout via `include_bigquery_connector=False`.

@@ -20,7 +20,7 @@ tf_state_bucket_name = "lakehouse-terraform-states-486419"
 bootstrap_ci_iam = false
 manage_wif       = true
 
-# ✅ Si tu veux "prod hardening" plus tard :
+#  Si tu veux "prod hardening" plus tard :
 # - tu mettras allow_pull_request = false en prod
 # - et tu garderas les plans PR en lecture seule via un autre mécanisme
 allow_pull_request = true

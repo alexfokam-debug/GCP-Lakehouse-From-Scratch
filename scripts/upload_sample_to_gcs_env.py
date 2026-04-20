@@ -100,7 +100,7 @@ def main() -> int:
 
     blob.upload_from_filename(str(src))
 
-    print("✅ Upload terminé. Terraform peut créer la table externe sans erreur.")
+    print(" Upload terminé. Terraform peut créer la table externe sans erreur.")
     return 0
 
 

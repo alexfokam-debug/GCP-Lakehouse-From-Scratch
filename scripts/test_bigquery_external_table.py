@@ -73,19 +73,19 @@ def build_parser() -> argparse.ArgumentParser:
 # 2) Helpers de log
 # -----------------------------
 def log_info(msg: str) -> None:
-    print(f"ℹ️  {msg}")
+    print(f"  {msg}")
 
 
 def log_ok(msg: str) -> None:
-    print(f"✅ {msg}")
+    print(f" {msg}")
 
 
 def log_warn(msg: str) -> None:
-    print(f"⚠️  {msg}")
+    print(f"  {msg}")
 
 
 def log_err(msg: str) -> None:
-    print(f"❌ {msg}", file=sys.stderr)
+    print(f" {msg}", file=sys.stderr)
 
 
 # -----------------------------

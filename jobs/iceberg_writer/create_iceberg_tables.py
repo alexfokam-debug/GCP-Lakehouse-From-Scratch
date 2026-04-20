@@ -137,7 +137,7 @@ def ensure_bq_dataset_exists(
 
     try:
         client.get_dataset(dataset_ref)
-        print("==> Dataset déjà existant ✅")
+        print("==> Dataset déjà existant ")
 
     except NotFound:
         print("==> Dataset non trouvé, création en cours...")
@@ -147,7 +147,7 @@ def ensure_bq_dataset_exists(
 
         client.create_dataset(dataset)
 
-        print("==> Dataset créé avec succès ✅")
+        print("==> Dataset créé avec succès ")
 
 def sanity_check_bigquery(df: DataFrame) -> None:
     _ = df.limit(1).collect()
@@ -211,15 +211,15 @@ def main() -> None:
 
         try:
             write_iceberg_writeTo(df, table_fqn, args.mode)
-            log("==> OK - Iceberg writeTo ✅")
+            log("==> OK - Iceberg writeTo ")
         except Exception:
             log(traceback.format_exc())
             write_iceberg_sql_fallback(spark, df, table_fqn, args.mode)
-            log("==> OK - Iceberg SQL fallback ✅")
+            log("==> OK - Iceberg SQL fallback ")
 
         # validation lecture
         _ = spark.read.table(table_fqn).limit(1).collect()
-        log("✅ Job terminé avec succès.")
+        log(" Job terminé avec succès.")
         spark.stop()
 
     except AnalysisException:
