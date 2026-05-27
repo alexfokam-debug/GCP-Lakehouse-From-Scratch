@@ -22,3 +22,4 @@ manage_wif       = true
 
 #  Autorise les PR (refs/pull/...) dans la condition WIF
 allow_pull_request = true
+enable_dataplex = false

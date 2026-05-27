@@ -75,3 +75,4 @@ enable_cloud_build_runtime_access = true
 cloud_build_service_account_email = "518653594867-compute@developer.gserviceaccount.com"
 
 enable_lakehouse_runtimes = false
+enable_dataplex = false

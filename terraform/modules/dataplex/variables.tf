@@ -35,3 +35,8 @@ variable "raw_external_dataset" {
   description = "BigQuery RAW external dataset ID (for external tables)"
 }
 
+variable "enable_dataplex" {
+  type        = bool
+  description = "Enable or disable Dataplex resources"
+  default     = false
+}

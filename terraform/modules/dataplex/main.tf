@@ -6,6 +6,8 @@ locals {
 # Dataplex Lake
 # =====================================================
 resource "google_dataplex_lake" "this" {
+  count = var.enable_dataplex ? 1 : 0
+
   project  = var.project_id
   location = var.region
 
@@ -19,6 +21,8 @@ resource "google_dataplex_lake" "this" {
 # RAW Zone (GCS)
 # =====================================================
 resource "google_dataplex_zone" "raw" {
+  count = var.enable_dataplex ? 1 : 0
+
   project  = var.project_id
   location = var.region
 
@@ -41,6 +45,8 @@ resource "google_dataplex_zone" "raw" {
 # CURATED Zone (BigQuery)
 # =====================================================
 resource "google_dataplex_zone" "curated" {
+  count = var.enable_dataplex ? 1 : 0
+
   project  = var.project_id
   location = var.region
 
@@ -63,6 +69,8 @@ resource "google_dataplex_zone" "curated" {
 # RAW Asset (GCS bucket)
 # =====================================================
 resource "google_dataplex_asset" "raw_bucket" {
+  count = var.enable_dataplex ? 1 : 0
+
   name          = "raw-gcs"
   lake          = google_dataplex_lake.this.name
   dataplex_zone = google_dataplex_zone.raw.name
@@ -89,6 +97,8 @@ resource "google_dataplex_asset" "raw_bucket" {
 # CURATED Asset (BigQuery dataset)
 # =====================================================
 resource "google_dataplex_asset" "curated_bq" {
+  count = var.enable_dataplex ? 1 : 0
+
   name          = "curated-bq"
   lake          = google_dataplex_lake.this.name
   dataplex_zone = google_dataplex_zone.curated.name
@@ -120,6 +130,8 @@ resource "google_dataplex_asset" "curated_bq" {
 # - Gouvernance légère / search / lineage
 # - Vision “entreprise” d’un lakehouse (RAW + CURATED)
 resource "google_dataplex_asset" "raw_bq_external" {
+  count = var.enable_dataplex ? 1 : 0
+
   name          = "raw-bq-external"
   lake          = google_dataplex_lake.this.name
   dataplex_zone = google_dataplex_zone.raw.name

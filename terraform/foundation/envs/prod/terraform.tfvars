@@ -24,3 +24,4 @@ manage_wif       = true
 # - tu mettras allow_pull_request = false en prod
 # - et tu garderas les plans PR en lecture seule via un autre mécanisme
 allow_pull_request = true
+enable_dataplex = false
